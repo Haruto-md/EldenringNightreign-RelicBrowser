@@ -123,7 +123,7 @@ const MANUAL_EFFECT_KEY_OVERRIDES = {
   "【葬儀屋】アーツ発動時、攻撃力上昇": "undertakerActivatingUltimateArtIncreasesAttackPower",
   "【葬儀屋】連撃の最終攻撃命中時、攻撃力上昇": "undertakerAttackPowerIncreasedByLandingTheFinalBlowOfAChainAttack",
   "脂アイテム使用時、追加で物理攻撃力上昇": "attackPowerIncreasesAfterUsingGreaseItems",
-  "Reduced Damage Negation After Evading": "repeatedEvasionsLowerDamageNegation",
+  "Reduced Damage Negation After Evading": "moreDamageTakenAfterEvasion",
 };
 
 function loadJson(relativePath) {

@@ -14,7 +14,7 @@ export const demeritEffects: DemeritEffect[] = [
   { key: EffectKey.continuousHPLoss, jaName: "HP持続減少" },
   { key: EffectKey.allResistancesDown, jaName: "すべての状態異常耐性低下" },
   { key: EffectKey.reducedDamageNegationForFlaskUsages, jaName: "聖杯瓶使用時、カット率低下" },
-  { key: EffectKey.repeatedEvasionsLowerDamageNegation, jaName: "回避直後、カット率低下" },
+  { key: EffectKey.moreDamageTakenAfterEvasion, jaName: "回避直後、カット率低下" },
   { key: EffectKey.repeatedEvasionsLowerDamageNegation, jaName: "回避連続時、カット率低下" },
   { key: EffectKey.takingDamageCausesPoisonBuildup, jaName: "被ダメージ時、毒を蓄積" },
   { key: EffectKey.takingDamageCausesRotBuildup, jaName: "被ダメージ時、腐敗を蓄積" },
