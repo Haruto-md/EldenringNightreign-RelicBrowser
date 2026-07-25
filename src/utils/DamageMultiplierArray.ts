@@ -28,24 +28,24 @@ function activeBuckets(sel: DamageProfileSelection): Set<string> {
     if (cat.id.startsWith("weapon:")) {
       active.add("melee");
       for (const m of attackModes) {
-        if (sel.enabledAttackModes.has(m.id)) active.add(m.bucket);
+        if (sel.enabledAttackModes.has(m.id)) {active.add(m.bucket);}
       }
       // criticalHit toggle also activates the +1 variant bucket
-      if (sel.enabledAttackModes.has("criticalHit")) active.add("criticalHitPlus1");
+      if (sel.enabledAttackModes.has("criticalHit")) {active.add("criticalHitPlus1");}
     }
     if (cat.hasSchools === "sorcery") {
       const s = sorcerySchools.find((x) => x.id === sel.schoolId);
-      if (s) active.add(s.bucket);
+      if (s) {active.add(s.bucket);}
     }
     if (cat.hasSchools === "incantation") {
       const s = incantationSchools.find((x) => x.id === sel.schoolId);
-      if (s) active.add(s.bucket);
+      if (s) {active.add(s.bucket);}
     }
   }
   const el = damageElements.find((e) => e.id === sel.element);
   if (el) {
     active.add(el.bucket);
-    if (sel.element !== "physical") active.add("affinityAttackUp");
+    if (sel.element !== "physical") {active.add("affinityAttackUp");}
   }
   return active;
 }
@@ -56,15 +56,15 @@ export function buildDamageMultiplierArray(sel: DamageProfileSelection): Float32
   for (const keyStr of Object.keys(damageMultipliers)) {
     const key = Number(keyStr) as EffectKey;
     const entry = damageMultipliers[key];
-    if (!entry) continue;
-    if (entry.nightfarer !== undefined && entry.nightfarer !== sel.nightfarer) continue;
+    if (!entry) {continue;}
+    if (entry.nightfarer !== undefined && entry.nightfarer !== sel.nightfarer) {continue;}
     let active = false;
     if (entry.conditionalGroup !== undefined) {
       active = sel.enabledSituational.has(key);
     } else if (entry.bucket !== undefined) {
       active = buckets.has(entry.bucket);
     }
-    if (active && key < EFFECT_KEY_ARRAY_LENGTH) arr[key] = entry.multiplier;
+    if (active && key < EFFECT_KEY_ARRAY_LENGTH) {arr[key] = entry.multiplier;}
   }
   return arr;
 }
@@ -76,8 +76,8 @@ export function situationalEffectsForNightfarer(
   for (const keyStr of Object.keys(damageMultipliers)) {
     const key = Number(keyStr) as EffectKey;
     const entry = damageMultipliers[key];
-    if (!entry || entry.conditionalGroup === undefined) continue;
-    if (entry.nightfarer !== undefined && entry.nightfarer !== nf) continue;
+    if (!entry || entry.conditionalGroup === undefined) {continue;}
+    if (entry.nightfarer !== undefined && entry.nightfarer !== nf) {continue;}
     out.push({ key, groupId: entry.conditionalGroup });
   }
   return out;

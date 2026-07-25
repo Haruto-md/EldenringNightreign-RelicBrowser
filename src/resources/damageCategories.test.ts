@@ -33,13 +33,13 @@ describe("damageCategories", () => {
   it("has 7 sorcery schools and 7 incantation schools with prefixed buckets", () => {
     expect(sorcerySchools.length).toBe(7);
     expect(incantationSchools.length).toBe(7);
-    for (const s of sorcerySchools) expect(s.bucket).toBe(`sorcerySchool:${s.id}`);
-    for (const s of incantationSchools) expect(s.bucket).toBe(`incantationSchool:${s.id}`);
+    for (const s of sorcerySchools) {expect(s.bucket).toBe(`sorcerySchool:${s.id}`);}
+    for (const s of incantationSchools) {expect(s.bucket).toBe(`incantationSchool:${s.id}`);}
   });
 
   it("has 5 damage elements with element:<id> buckets", () => {
     expect(damageElements.length).toBe(5);
-    for (const e of damageElements) expect(e.bucket).toBe(`element:${e.id}`);
+    for (const e of damageElements) {expect(e.bucket).toBe(`element:${e.id}`);}
     expect(damageElements.map((e) => e.id)).toEqual([
       "physical",
       "magic",
@@ -59,8 +59,8 @@ describe("damageCategories", () => {
   });
 
   it("does not include labelKey fields (Japanese-fixed UI, no i18n)", () => {
-    for (const c of primaryCategories) expect((c as unknown as Record<string, unknown>).labelKey).toBeUndefined();
-    for (const s of sorcerySchools) expect((s as unknown as Record<string, unknown>).labelKey).toBeUndefined();
-    for (const e of damageElements) expect((e as unknown as Record<string, unknown>).labelKey).toBeUndefined();
+    for (const c of primaryCategories) {expect((c as unknown as Record<string, unknown>).labelKey).toBeUndefined();}
+    for (const s of sorcerySchools) {expect((s as unknown as Record<string, unknown>).labelKey).toBeUndefined();}
+    for (const e of damageElements) {expect((e as unknown as Record<string, unknown>).labelKey).toBeUndefined();}
   });
 });
