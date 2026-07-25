@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   Checkbox,
+  Chip,
   Divider,
   FormControl,
   FormControlLabel,
@@ -42,6 +43,7 @@ import {
   type DamageProfileSelection,
 } from "../utils/DamageMultiplierArray";
 import { getEffectByKey, getEffectName } from "../utils/DataUtils";
+import { getChipColor, RelicSlotColor } from "../utils/RelicColor";
 import { isNightfarer, Nightfarer, nightfarers } from "../utils/Nightfarers";
 import { DamageRelicSlot } from "./DamageRelicSlot";
 
@@ -760,17 +762,46 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
+                        gap: 1,
                         "&:last-child": { paddingBottom: 0.5 },
                       }}
                     >
-                      <Typography
-                        fontWeight="bold"
-                        color={disabled ? "text.disabled" : "text.primary"}
-                        variant="body2"
-                      >
-                        {vessel.name}
-                      </Typography>
-                      <Checkbox checked={!disabled} size="small" />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          fontWeight="bold"
+                          color={disabled ? "text.disabled" : "text.primary"}
+                          variant="body2"
+                          sx={{ mb: 0.5 }}
+                        >
+                          {vessel.name}
+                        </Typography>
+                        <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                          {vessel.slots.map((color, idx) => (
+                            <Chip
+                              key={idx}
+                              size="small"
+                              color={getChipColor(color)}
+                              variant="filled"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.7rem",
+                              }}
+                              label={
+                                color === RelicSlotColor.Red
+                                  ? "赤"
+                                  : color === RelicSlotColor.Blue
+                                  ? "青"
+                                  : color === RelicSlotColor.Yellow
+                                  ? "黄"
+                                  : color === RelicSlotColor.Green
+                                  ? "緑"
+                                  : "全"
+                              }
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                      <Checkbox checked={!disabled} size="small" sx={{ flexShrink: 0 }} />
                     </CardContent>
                   </Card>
                 );

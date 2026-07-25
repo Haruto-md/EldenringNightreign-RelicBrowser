@@ -61,5 +61,17 @@ export function matchEffectKeyName(
   if (!eng) {
     return undefined;
   }
-  return englishToEffectKeyName.get(eng);
+  // Try exact match first
+  let result = englishToEffectKeyName.get(eng);
+  if (result) {
+    return result;
+  }
+  // Fallback to case-insensitive match
+  const engLower = eng.toLowerCase();
+  for (const [key, value] of englishToEffectKeyName) {
+    if (key.toLowerCase() === engLower) {
+      return value;
+    }
+  }
+  return undefined;
 }
