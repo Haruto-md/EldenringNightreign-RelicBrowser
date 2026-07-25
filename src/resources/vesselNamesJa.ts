@@ -17,7 +17,6 @@ export const vesselNamesJa: Record<string, string> = {
   "Guardian's Goblet": "守護者の盃",
   "Guardian's Urn": "守護者の器",
   "Soot-Covered Guardian's Urn": "煤けた守護者の器",
-  "Sealed Guardian's Urn": "封じられた守護者の器",
   "Decrepit Guardian's Goblet": "朽ちた守護者の盃",
   "Forgotten Guardian's Goblet": "忘れられた守護者の盃",
   "Ironeye's Chalice": "鉄の目の高杯",
@@ -75,5 +74,4 @@ export const vesselNamesJa: Record<string, string> = {
   "Sealed Undertaker's Urn": "封じられた葬儀屋の器",
   "Soot-Covered Undertaker's Urn": "煤けた葬儀屋の器",
   "Decrepit Undertaker's Goblet": "朽ちた葬儀屋の盃",
-  "Forgotten Undertaker's Goblet": "忘れられた葬儀屋の盃",
 };

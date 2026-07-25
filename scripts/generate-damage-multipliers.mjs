@@ -385,8 +385,13 @@ ${demeritEntries.join("\n")}
   // English (Vessels.ts) and Japanese (vessels.json) vessel names share no
   // string, so vessels are matched by their 6-slot color signature
   // (n1..n3,d1..d3 in vessels.json <-> slots[0..5] in Vessels.ts) within the
-  // same Nightfarer. If a signature is not unique (or matches nothing) within
-  // a Nightfarer, fall back to array-position correspondence and warn.
+  // same Nightfarer. Vessels.ts and vessels.json do NOT list vessels in the
+  // same order (e.g. Chalice/Urn are swapped between the two sources), so
+  // there is no positional fallback: a vessel is matched ONLY when its
+  // signature has exactly one candidate on the json side AND that signature
+  // is unique among the app's own vessels for that Nightfarer. Anything else
+  // is skipped (warned) and left for the English-name fallback at the call
+  // site, since a wrong Japanese name is worse than no Japanese name.
   const JSON_KEY_TO_VESSELS_EXPORT = {
     wylder: "wylderVessels",
     gurdian: "guardianVessels",
@@ -428,24 +433,37 @@ ${demeritEntries.join("\n")}
       jsonBySig.get(k).push(v.name);
     }
 
-    appVesselList.forEach((appVessel, index) => {
-      const candidates = jsonBySig.get(sigKey(appVessel.slots)) ?? [];
+    // Count how many app vessels share each signature within this
+    // Nightfarer, so we can also refuse to match when the app side is
+    // ambiguous (finding #2): two app vessels with the same signature must
+    // not both silently resolve to the same single json name.
+    const appSigCounts = new Map();
+    for (const appVessel of appVesselList) {
+      const k = sigKey(appVessel.slots);
+      appSigCounts.set(k, (appSigCounts.get(k) ?? 0) + 1);
+    }
+
+    for (const appVessel of appVesselList) {
+      const sig = sigKey(appVessel.slots);
+      const candidates = jsonBySig.get(sig) ?? [];
       let jaName;
-      if (candidates.length === 1) {
+      if (candidates.length === 1 && appSigCounts.get(sig) === 1) {
         jaName = candidates[0];
       } else {
-        jaName = jsonVesselList[index]?.name;
-        const reason = candidates.length === 0 ? "no signature match" : "ambiguous signature match";
+        let reason;
+        if (candidates.length === 0) reason = "no signature match on json side";
+        else if (candidates.length > 1) reason = "ambiguous signature match on json side";
+        else reason = "signature not unique among app's own vessels";
         console.warn(
           `WARNING: vesselNamesJa: ${reason} for "${appVessel.name}" (${jsonKey}); ` +
-            `falling back to positional match -> ${JSON.stringify(jaName)}`
+            `no Japanese name emitted (English fallback will be used).`
         );
       }
       if (jaName && !seenEnglishNames.has(appVessel.name)) {
         seenEnglishNames.add(appVessel.name);
         vesselJaEntries.push(`  ${JSON.stringify(appVessel.name)}: ${JSON.stringify(jaName)},`);
       }
-    });
+    }
   }
 
   const vesselNamesJaOut = `// GENERATED FILE — do not edit by hand.
