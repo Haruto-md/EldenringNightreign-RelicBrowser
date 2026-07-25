@@ -1,5 +1,10 @@
 # Damage Ranking Tab — Design
 
+> **⚠️ SUPERSEDED — DO NOT IMPLEMENT.** This design scored individual relics in
+> isolation and ignored the core fact that a build is a 6-slot vessel (3 normal +
+> 3 deep) with per-slot color constraints. It has been replaced by
+> `2026-07-25-damage-optimization-design.md`. Kept only as historical record.
+
 ## Motivation
 
 RelicHub is a separate, existing desktop tool for analyzing Elden Ring Nightreign
