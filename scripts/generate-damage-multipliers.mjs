@@ -136,6 +136,92 @@ const MANUAL_EFFECT_KEY_OVERRIDES = {
   "【葬儀屋】連撃の最終攻撃命中時、攻撃力上昇": "undertakerAttackPowerIncreasedByLandingTheFinalBlowOfAChainAttack",
   "脂アイテム使用時、追加で物理攻撃力上昇": "attackPowerIncreasesAfterUsingGreaseItems",
   "Reduced Damage Negation After Evading": "moreDamageTakenAfterEvasion",
+
+  // Art-gauge-fill effects: RelicHub's eng text ("Critical hits fills more
+  // of the Art gauge") diverges in wording from i18n.ts's ("Art gauge fills
+  // moderately upon critical hit"), so exact/case-insensitive eng matching
+  // fails outright.
+  "致命の一撃で、アーツゲージ増加": "artGaugeFillsModeratelyUponCriticalHit",
+  "致命の一撃で、アーツゲージ増加+1": "artGaugeFillsModeratelyUponCriticalHitPlus1",
+  "ガード成功時、アーツゲージ増加": "artGaugeChargedFromSuccessfulGuarding",
+  "ガード成功時、アーツゲージ増加+1": "artGaugeChargedFromSuccessfulGuardingPlus1",
+
+  // "Extend Spell Duration" (RelicHub) vs "Extended Spell Duration" (i18n.ts).
+  "魔術／祈祷、効果時間延長": "extendedSpellDuration",
+
+  // Elemental damage-negation +1/+2: RelicHub keeps the base wording
+  // ("Magic Damage Negation Up +1") for these tiers, but the app's +1/+2
+  // members live under the "Improved <Element> Damage Negation" family
+  // (confirmed by checking the base "改良" naming convention used for
+  // physical/affinity, which the app also mirrors for magic/fire/lightning/holy).
+  "魔力カット率上昇+1": "improvedMagicDamageNegationPlus1",
+  "魔力カット率上昇+2": "improvedMagicDamageNegationPlus2",
+  "炎カット率上昇+1": "improvedFireDamageNegationPlus1",
+  "炎カット率上昇+2": "improvedFireDamageNegationPlus2",
+  "雷カット率上昇+1": "improvedLightningDamageNegationPlus1",
+  "雷カット率上昇+2": "improvedLightningDamageNegationPlus2",
+  "聖カット率上昇+1": "improvedHolyDamageNegationPlus1",
+  "聖カット率上昇+2": "improvedHolyDamageNegationPlus2",
+
+  // "Gesture 'Crossed Legs' Builds Up Madness" (RelicHub, quoted) vs
+  // "Gesture Crossed Legs Builds Up Madness" (i18n.ts, unquoted).
+  "ジェスチャー「あぐら」により、発狂が蓄積": "gestureCrossedLegsBuildsUpMadness",
+
+  // "Frostbite in Vicinity Conceals Self" (RelicHub) vs "Nearby Frostbite
+  // Conceals Self" (i18n.ts) — same effect, reordered wording.
+  "周囲で凍傷状態の発生時、自身の姿を隠す": "nearbyFrostbiteConcealsSelf",
+
+  // "Change compatible armament's skill to X at start of expedition"
+  // (RelicHub) vs "Changes compatible armament's skill to X at start of
+  // expedition" (i18n.ts) — verb-tense mismatch ("Change" vs "Changes")
+  // breaks exact/case-insensitive matching for all 20 skill variants.
+  "出撃時の武器の戦技を「我慢」にする": "changesCompatibleArmamentsSkillToEndureAtStartOfExpedition",
+  "出撃時の武器の戦技を「クイックステップ」にする": "changesCompatibleArmamentsSkillToQuickstepAtStartOfExpedition",
+  "出撃時の武器の戦技を「嵐脚」にする": "changesCompatibleArmamentsSkillToStormStompAtStartOfExpedition",
+  "出撃時の武器の戦技を「デターミネーション」にする": "changesCompatibleArmamentsSkillToDeterminationAtStartOfExpedition",
+  "出撃時の武器の戦技を「輝剣の円陣」にする": "changesCompatibleArmamentsSkillToGlintbladePhalanxAtStartOfExpedition",
+  "出撃時の武器の戦技を「グラビタス」にする": "changesCompatibleArmamentsSkillToGravitasAtStartOfExpedition",
+  "出撃時の武器の戦技を「炎撃」にする": "changesCompatibleArmamentsSkillToFlamingStrikeAtStartOfExpedition",
+  "出撃時の武器の戦技を「溶岩噴火」にする": "changesCompatibleArmamentsSkillToEruptionAtStartOfExpedition",
+  "出撃時の武器の戦技を「落雷」にする": "changesCompatibleArmamentsSkillToThunderboltAtStartOfExpedition",
+  "出撃時の武器の戦技を「雷撃斬」にする": "changesCompatibleArmamentsSkillToLightningSlashAtStartOfExpedition",
+  "出撃時の武器の戦技を「聖なる刃」にする": "changesCompatibleArmamentsSkillToSacredBladeAtStartOfExpedition",
+  "出撃時の武器の戦技を「祈りの一撃」にする": "changesCompatibleArmamentsSkillToPrayerfulStrikeAtStartOfExpedition",
+  "出撃時の武器の戦技を「毒の霧」にする": "changesCompatibleArmamentsSkillToPoisonousMistAtStartOfExpedition",
+  "出撃時の武器の戦技を「毒蛾は二度舞う」にする": "changesCompatibleArmamentsSkillToPoisonMothFlightAtStartOfExpedition",
+  "出撃時の武器の戦技を「血の刃」にする": "changesCompatibleArmamentsSkillToBloodBladeAtStartOfExpedition",
+  "出撃時の武器の戦技を「切腹」にする": "changesCompatibleArmamentsSkillToSeppukuAtStartOfExpedition",
+  "出撃時の武器の戦技を「冷気の霧」にする": "changesCompatibleArmamentsSkillToChillingMistAtStartOfExpedition",
+  "出撃時の武器の戦技を「霜踏み」にする": "changesCompatibleArmamentsSkillToHoarfrostStompAtStartOfExpedition",
+  "出撃時の武器の戦技を「白い影の誘い」にする": "changesCompatibleArmamentsSkillToWhiteShadowsLureAtStartOfExpedition",
+  "出撃時の武器の戦技を「アローレイン」にする": "changesCompatibleArmamentsSkillToRainOfArrowsAtStartOfExpedition",
+
+  // "Increase rune acquisition for self and allies" (RelicHub) vs
+  // "Increased rune acquisition for self and allies" (i18n.ts).
+  "自身と味方の取得ルーン増加": "increasedRuneAcquisitionForSelfAndAllies",
+  // "...for nearby allies but not for self" (RelicHub, no comma) vs
+  // "...for nearby allies, but not for self" (i18n.ts, comma).
+  "自身を除く、周囲の味方のスタミナ回復速度上昇": "raisedStaminaRecoveryForNearbyAlliesButNotForSelf",
+  // "Item confer effect..." (RelicHub, singular) vs "Items confer effect..."
+  // (i18n.ts, plural).
+  "アイテムの効果が周囲の味方にも発動": "itemsConferEffectToAllNearbyAllies",
+
+  // "Max FP increased for each Sorcerer's Rise unlocked" (RelicHub) vs
+  // "Max FP permanently increased after releasing Sorcerer's Rise mechanism"
+  // (i18n.ts) — same effect, differently phrased.
+  "魔術師塔の仕掛けが解除される度、最大FP上昇": "maxFpPermanentlyIncreasedAfterReleasingSorcerersRiseMechanism",
+  // Trailing period in i18n.ts ("...Great Church.") breaks exact matching.
+  "大教会の強敵を倒す度、最大HP上昇": "maxHPIncreasedForEachGreatEnemyDefeatedAtAGreatChurch",
+  "封牢の囚を倒す度、攻撃力上昇": "attackPowerPermanentlyIncreasedForEachEvergaolPrisonerDefeated",
+  "夜の侵入者を倒す度、攻撃力上昇": "attackPowerUpAfterDefeatingANightInvader",
+
+  // "[Duchess] Reprise events upon nearby enemies by landing the final blow
+  // of a chain attack with dagger" (RelicHub) vs "[Duchess] Dagger chain
+  // attack reprises event upon nearby enemies" (i18n.ts).
+  "【レディ】短剣による攻撃連続時、周囲の敵に、直近の出来事を再演": "duchessDaggerChainAttackReprises",
+  // "Defeating enemies Near Totem Stela" (RelicHub, truncated) vs "Defeating
+  // enemies near Totem Stela restores HP" (i18n.ts).
+  "トーテム・ステラの周囲で敵を倒した時、HP回復": "defeatingEnemiesNearTotemStelaRestoresHP",
 };
 
 function loadJson(relativePath) {
