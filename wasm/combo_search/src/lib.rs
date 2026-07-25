@@ -117,6 +117,31 @@ fn is_recommended_effect(effect: &Effect, recommended_bitmap: &[bool; EFFECT_KEY
     unsafe { *recommended_bitmap.get_unchecked(k) }
 }
 
+/// In damage mode, a relic is a search candidate if it carries an effect with a
+/// damage multiplier > 1.0, OR an effect named by a must-have range
+/// (`min_stacks > 0`) — otherwise a quantity-only must-have (no damage
+/// multiplier of its own) could never enter the candidate set, silently
+/// making its range constraint unsatisfiable.
+#[inline(always)]
+fn is_damage_mode_candidate(
+    effects: &[Effect],
+    nightfarer: u8,
+    damage_mults: &[f32],
+    range_min_keys: &[bool; EFFECT_KEY_SPACE],
+) -> bool {
+    for e in effects {
+        let k = e.key as usize;
+        if k >= EFFECT_KEY_SPACE { continue; }
+        if let Some(nf) = e.nightfarer { if nf != nightfarer { continue; } }
+        if damage_mults.get(k).copied().unwrap_or(1.0) > 1.0
+            || unsafe { *range_min_keys.get_unchecked(k) }
+        {
+            return true;
+        }
+    }
+    false
+}
+
 #[inline(always)]
 fn pack_triple_key(relic_indices: [Option<usize>; 3]) -> u32 {
     // Pack up to three sorted relic indices (each < 1023) into 30 bits (3 * 10).
@@ -539,22 +564,29 @@ pub fn search_combinations(input: JsValue) -> JsValue {
         None => Vec::new(),
     };
 
+    // Keys named by a must-have range (min_stacks > 0). In damage mode these
+    // must also qualify a relic as a candidate — see is_damage_mode_candidate.
+    let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+    for (k, min, _max) in &ranges_vec {
+        if *min > 0 {
+            let ku = *k as usize;
+            if ku < EFFECT_KEY_SPACE { range_min_keys[ku] = true; }
+        }
+    }
+
     // Build candidate bitmaps for normal and deep relics
     let mut effect_candidates_norm: Vec<usize> = Vec::new();
     effect_candidates_norm.reserve(input.relics.len());
     let mut is_candidate_norm: Vec<bool> = vec![false; input.relics.len()];
     for (idx, relic) in input.relics.iter().enumerate() {
-        let mut any_selected = false;
-        for e in &relic.effects {
-            let k = e.key as usize;
-            if k >= EFFECT_KEY_SPACE { continue; }
-            if damage_mode {
-                if let Some(nf) = e.nightfarer { if nf != input.nightfarer { continue; } }
-                if damage_mults.get(k).copied().unwrap_or(1.0) > 1.0 { any_selected = true; break; }
-            } else {
-                if unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; }
-            }
-        }
+        let any_selected = if damage_mode {
+            is_damage_mode_candidate(&relic.effects, input.nightfarer, &damage_mults, &range_min_keys)
+        } else {
+            relic.effects.iter().any(|e| {
+                let k = e.key as usize;
+                k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) }
+            })
+        };
         if any_selected { effect_candidates_norm.push(idx); unsafe { *is_candidate_norm.get_unchecked_mut(idx) = true; } }
     }
 
@@ -562,17 +594,14 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     effect_candidates_deep.reserve(input.deep_relics.len());
     let mut is_candidate_deep: Vec<bool> = vec![false; input.deep_relics.len()];
     for (idx, relic) in input.deep_relics.iter().enumerate() {
-        let mut any_selected = false;
-        for e in &relic.effects {
-            let k = e.key as usize;
-            if k >= EFFECT_KEY_SPACE { continue; }
-            if damage_mode {
-                if let Some(nf) = e.nightfarer { if nf != input.nightfarer { continue; } }
-                if damage_mults.get(k).copied().unwrap_or(1.0) > 1.0 { any_selected = true; break; }
-            } else {
-                if unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; }
-            }
-        }
+        let any_selected = if damage_mode {
+            is_damage_mode_candidate(&relic.effects, input.nightfarer, &damage_mults, &range_min_keys)
+        } else {
+            relic.effects.iter().any(|e| {
+                let k = e.key as usize;
+                k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) }
+            })
+        };
         if any_selected { effect_candidates_deep.push(idx); unsafe { *is_candidate_deep.get_unchecked_mut(idx) = true; } }
     }
 
@@ -756,6 +785,25 @@ mod damage_tests {
         let mut ctx = ScoreContext::new();
         let p = calc_damage(0 /* nightfarer 0 != 3 */, idx, &normal, &deep, &m, &mut ctx);
         assert!((p - 1.0f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn quantity_only_musthave_relic_is_a_candidate() {
+        // Effect key 30 has NO damage multiplier (stays 1.0) but is named by a
+        // must-have range (min_stacks > 0). It must still be treated as a
+        // damage-mode search candidate so the range constraint is satisfiable.
+        let effects = vec![Effect {
+            key: 30, nightfarer: None, stacks: Some(true), group: None, level: None,
+            startingBonus: None, r#type: None,
+        }];
+        let damage_mults = mults(&[(10, 1.1)]); // key 30 stays 1.0
+        let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+        range_min_keys[30] = true;
+        assert!(is_damage_mode_candidate(&effects, 0, &damage_mults, &range_min_keys));
+
+        // Sanity: without the range-min flag, a non-damage effect is NOT a candidate.
+        let range_min_keys_empty = [false; EFFECT_KEY_SPACE];
+        assert!(!is_damage_mode_candidate(&effects, 0, &damage_mults, &range_min_keys_empty));
     }
 
     #[test]
