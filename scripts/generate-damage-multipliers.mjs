@@ -6,6 +6,7 @@ import {
   buildEngToJpnLookup,
   extractI18nEnglishEffectStrings,
   matchEffectKeyName,
+  extractVesselArrays,
 } from "./damage-multiplier-matching.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -135,7 +136,9 @@ function main() {
   const skills = loadJson("RelicHub/data/skills.json");
   const deep = loadJson("RelicHub/data/deep.json");
   const demerit = loadJson("RelicHub/data/demerit.json");
+  const vessels = loadJson("RelicHub/data/vessels.json");
   const i18nSource = readFileSync(join(ROOT, "src/i18n.ts"), "utf-8");
+  const vesselsSource = readFileSync(join(ROOT, "src/utils/Vessels.ts"), "utf-8");
 
   const jpnToEng = buildJpnToEngLookup([
     ...Object.values(skills.skills),
@@ -356,6 +359,104 @@ ${demeritEntries.join("\n")}
 `;
   writeFileSync(join(ROOT, "src/resources/demeritEffects.ts"), demeritOut, "utf-8");
   console.log(`Wrote ${demeritEntries.length} entries to src/resources/demeritEffects.ts`);
+
+  // --- nightfarerNamesJa.ts : Nightfarer -> RelicHub Japanese label ---
+  // vessels.json top-level keys are misspelled on purpose ("gurdian",
+  // "revnant", "execuor") — this explicit map is the only source of truth for
+  // them. Never derive these keys from the Nightfarer enum member names.
+  const NIGHTFARER_VESSEL_KEYS = [
+    ["wylder", 0], ["gurdian", 1], ["ironeye", 2], ["duchess", 3],
+    ["raider", 4], ["revnant", 5], ["recluse", 6], ["execuor", 7],
+    ["scholar", 8], ["undertaker", 9],
+  ];
+  const nfEntries = NIGHTFARER_VESSEL_KEYS.map(([key, nf]) => {
+    const label = vessels[key]?.label;
+    if (!label) throw new Error(`vessels.json missing key ${key}`);
+    return `  ${nf}: ${JSON.stringify(label)},`;
+  });
+  writeFileSync(
+    join(ROOT, "src/resources/nightfarerNamesJa.ts"),
+    `// GENERATED FILE — do not edit by hand.\n// Regenerate with: node scripts/generate-damage-multipliers.mjs\nimport type { Nightfarer } from "../utils/Nightfarers";\n\nexport const nightfarerNamesJa: Record<Nightfarer, string> = {\n${nfEntries.join("\n")}\n};\n`,
+    "utf-8"
+  );
+  console.log(`Wrote ${nfEntries.length} entries to src/resources/nightfarerNamesJa.ts`);
+
+  // --- vesselNamesJa.ts : app's English vessel name -> RelicHub Japanese name ---
+  // English (Vessels.ts) and Japanese (vessels.json) vessel names share no
+  // string, so vessels are matched by their 6-slot color signature
+  // (n1..n3,d1..d3 in vessels.json <-> slots[0..5] in Vessels.ts) within the
+  // same Nightfarer. If a signature is not unique (or matches nothing) within
+  // a Nightfarer, fall back to array-position correspondence and warn.
+  const JSON_KEY_TO_VESSELS_EXPORT = {
+    wylder: "wylderVessels",
+    gurdian: "guardianVessels",
+    ironeye: "ironeyeVessels",
+    duchess: "duchessVessels",
+    raider: "raiderVessels",
+    revnant: "revenantVessels",
+    recluse: "recluseVessels",
+    execuor: "executorVessels",
+    scholar: "scholarVessels",
+    undertaker: "undertakerVessels",
+  };
+  // RelicSlotColor enum numbers (src/utils/RelicColor.ts): Any=0, Red=1,
+  // Blue=2, Yellow=3, Green=4.
+  const JPN_COLOR_TO_NUMBER = { ALL: 0, R: 1, B: 2, Y: 3, G: 4 };
+
+  const vesselArraysByExportName = extractVesselArrays(vesselsSource);
+  const vesselJaEntries = [];
+  const seenEnglishNames = new Set();
+
+  for (const [jsonKey, exportName] of Object.entries(JSON_KEY_TO_VESSELS_EXPORT)) {
+    const jsonVesselList = vessels[jsonKey]?.vessels;
+    if (!jsonVesselList) throw new Error(`vessels.json missing vessels[] for key ${jsonKey}`);
+    const appVesselList = vesselArraysByExportName[exportName];
+    if (!appVesselList) throw new Error(`Vessels.ts missing export ${exportName}`);
+
+    const sigKey = (sig) => sig.join(",");
+
+    const jsonBySig = new Map();
+    for (const v of jsonVesselList) {
+      const sig = [v.n1, v.n2, v.n3, v.d1, v.d2, v.d3].map((c) => {
+        if (!(c in JPN_COLOR_TO_NUMBER)) {
+          throw new Error(`Unrecognized vessels.json color code "${c}" for ${v.name}`);
+        }
+        return JPN_COLOR_TO_NUMBER[c];
+      });
+      const k = sigKey(sig);
+      if (!jsonBySig.has(k)) jsonBySig.set(k, []);
+      jsonBySig.get(k).push(v.name);
+    }
+
+    appVesselList.forEach((appVessel, index) => {
+      const candidates = jsonBySig.get(sigKey(appVessel.slots)) ?? [];
+      let jaName;
+      if (candidates.length === 1) {
+        jaName = candidates[0];
+      } else {
+        jaName = jsonVesselList[index]?.name;
+        const reason = candidates.length === 0 ? "no signature match" : "ambiguous signature match";
+        console.warn(
+          `WARNING: vesselNamesJa: ${reason} for "${appVessel.name}" (${jsonKey}); ` +
+            `falling back to positional match -> ${JSON.stringify(jaName)}`
+        );
+      }
+      if (jaName && !seenEnglishNames.has(appVessel.name)) {
+        seenEnglishNames.add(appVessel.name);
+        vesselJaEntries.push(`  ${JSON.stringify(appVessel.name)}: ${JSON.stringify(jaName)},`);
+      }
+    });
+  }
+
+  const vesselNamesJaOut = `// GENERATED FILE — do not edit by hand.
+// Regenerate with: node scripts/generate-damage-multipliers.mjs
+
+export const vesselNamesJa: Record<string, string> = {
+${vesselJaEntries.join("\n")}
+};
+`;
+  writeFileSync(join(ROOT, "src/resources/vesselNamesJa.ts"), vesselNamesJaOut, "utf-8");
+  console.log(`Wrote ${vesselJaEntries.length} entries to src/resources/vesselNamesJa.ts`);
 }
 
 main();

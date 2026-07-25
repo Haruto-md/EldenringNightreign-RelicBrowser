@@ -48,6 +48,64 @@ export function extractI18nEnglishEffectStrings(i18nSourceText) {
   return map;
 }
 
+// RelicSlotColor enum numbers (must match src/utils/RelicColor.ts):
+// Any=0, Red=1, Blue=2, Yellow=3, Green=4.
+const COLOR_NAME_TO_NUMBER = { Any: 0, Red: 1, Blue: 2, Yellow: 3, Green: 4 };
+
+function parseVesselEntries(blockText) {
+  const vessels = [];
+  const entryPattern = /\{\s*name:\s*"([^"]+)",\s*slots:\s*\[([\s\S]*?)\]/g;
+  let match;
+  while ((match = entryPattern.exec(blockText)) !== null) {
+    const [, name, slotsText] = match;
+    const slots = slotsText
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const colorMatch = s.match(/RelicSlotColor\.(\w+)/);
+        if (!colorMatch || !(colorMatch[1] in COLOR_NAME_TO_NUMBER)) {
+          throw new Error(`Could not parse vessel slot color: "${s}"`);
+        }
+        return COLOR_NAME_TO_NUMBER[colorMatch[1]];
+      });
+    vessels.push({ name, slots });
+  }
+  return vessels;
+}
+
+// Parses src/utils/Vessels.ts as text (not imported as an ES module — it uses
+// `const enum`s that Node's TypeScript type-stripping cannot execute, and
+// extensionless relative imports Node's ESM loader cannot resolve) and
+// returns { [exportName]: Array<{ name, slots: number[] }> } for every
+// `export const XVessels: Vessel[] = [...]` array, with `...anyoneVessels`
+// spreads expanded inline.
+export function extractVesselArrays(vesselsSourceText) {
+  const arrayPattern = /export const (\w+): Vessel\[\] = \[([\s\S]*?)\n\] as const;/g;
+  const rawBlocks = new Map();
+  let match;
+  while ((match = arrayPattern.exec(vesselsSourceText)) !== null) {
+    rawBlocks.set(match[1], match[2]);
+  }
+
+  const anyoneBlock = rawBlocks.get("anyoneVessels");
+  if (!anyoneBlock) {
+    throw new Error("Could not find anyoneVessels array in Vessels.ts source");
+  }
+  const anyoneVessels = parseVesselEntries(anyoneBlock);
+
+  const result = {};
+  for (const [exportName, blockText] of rawBlocks) {
+    if (exportName === "anyoneVessels") continue;
+    const vessels = parseVesselEntries(blockText);
+    if (blockText.includes("...anyoneVessels")) {
+      vessels.push(...anyoneVessels);
+    }
+    result[exportName] = vessels;
+  }
+  return result;
+}
+
 export function matchEffectKeyName(
   jpnName,
   jpnToEng,
