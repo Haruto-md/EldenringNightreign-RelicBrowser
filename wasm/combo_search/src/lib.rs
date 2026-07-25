@@ -93,6 +93,8 @@ pub struct SearchInput {
     pub enabled_vessels: Vec<[u8;6]>,
     pub recommended_effects: Vec<Effect>,
     pub selected_effect_ranges: Option<Vec<SelectedEffectRange>>, // new optional
+    pub damage_multipliers: Option<Vec<f32>>,   // len == EFFECT_KEY_SPACE; 1.0 = irrelevant
+    pub excluded_demerit_keys: Option<Vec<u32>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -151,6 +153,9 @@ fn add_combination_if_unique6(
     ranges: &[(u32,u8,u8)],
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    damage_mode: bool,
+    damage_mults: &[f32],
+    excluded_demerits: &[u32],
 ) {
     // Skip combos where all 6 slots are empty
     if relic_indices6.iter().all(|x| x.is_none()) { return; }
@@ -161,7 +166,13 @@ fn add_combination_if_unique6(
     // Drop if out of requested stack ranges
     if !combination_satisfies_ranges(&relic_indices6, relics_normal, relics_deep, nightfarer, ranges, selected_groups_by_key, selected_levels_by_key) { return; }
 
-    let points = calc_points(nightfarer, relic_indices6, relics_normal, relics_deep, selected_keys, recommended_bitmap, score_ctx);
+    if damage_mode && combination_has_excluded_demerit(&relic_indices6, relics_deep, excluded_demerits) { return; }
+
+    let points = if damage_mode {
+        calc_damage(nightfarer, relic_indices6, relics_normal, relics_deep, damage_mults, score_ctx)
+    } else {
+        calc_points(nightfarer, relic_indices6, relics_normal, relics_deep, selected_keys, recommended_bitmap, score_ctx)
+    };
 
     if results.len() < TOP_RESULTS {
         results.push(VesselCombinationResultEntry { vessel_index, relic_indices: relic_indices6, points });
@@ -254,6 +265,58 @@ fn calc_points(
 }
 
 #[inline(always)]
+fn calc_damage(
+    nightfarer: u8,
+    relic_indices6: [Option<usize>; 6],
+    relics_normal: &[RelicSlot],
+    relics_deep: &[RelicSlot],
+    multipliers: &[f32],
+    ctx: &mut ScoreContext,
+) -> f32 {
+    ctx.next_generation();
+    let mut product: f32 = 1.0;
+    for (slot_i, opt_idx) in relic_indices6.iter().enumerate() {
+        if let Some(idx) = opt_idx {
+            let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } }
+                        else { unsafe { relics_deep.get_unchecked(*idx) } };
+            for effect in &relic.effects {
+                if let Some(nf) = effect.nightfarer { if nf != nightfarer { continue; } }
+                let k = effect.key as usize;
+                if k >= EFFECT_KEY_SPACE { continue; }
+                let m = unsafe { *multipliers.get_unchecked(k) };
+                if m <= 1.0 { continue; }
+                let stacks = effect.stacks.unwrap_or(true);
+                if !stacks {
+                    if ctx.is_key(k) { continue; }
+                    ctx.set_key(k);
+                }
+                product *= m;
+            }
+        }
+    }
+    product
+}
+
+#[inline(always)]
+fn combination_has_excluded_demerit(
+    relic_indices6: &[Option<usize>;6],
+    relics_deep: &[RelicSlot],
+    excluded: &[u32],
+) -> bool {
+    if excluded.is_empty() { return false; }
+    // Demerits live on deep relics (slots 3..5).
+    for slot_i in 3..6 {
+        if let Some(idx) = relic_indices6[slot_i] {
+            let relic = unsafe { relics_deep.get_unchecked(idx) };
+            for effect in &relic.effects {
+                if excluded.iter().any(|&e| e == effect.key) { return true; }
+            }
+        }
+    }
+    false
+}
+
+#[inline(always)]
 fn combination_satisfies_ranges(
     relic_indices6: &[Option<usize>;6],
     relics_normal: &[RelicSlot],
@@ -323,6 +386,9 @@ fn search_group_triples(
     nightfarer: u8,
     selected_bitmap: &[bool; EFFECT_KEY_SPACE],
     recommended_bitmap: &[bool; EFFECT_KEY_SPACE],
+    damage_mode: bool,
+    damage_mults: &[f32],
+    excluded_demerits: &[u32],
 ) -> (Vec<([Option<usize>;3], f32)>, u32) {
     let mut local_results: Vec<([Option<usize>;3], f32)> = Vec::with_capacity(TOP_GROUP_RESULTS);
     let mut local_seen: HashSet<u32> = HashSet::new();
@@ -367,15 +433,28 @@ fn search_group_triples(
                 if is_deep_group { full_indices6[3] = group_indices[0]; full_indices6[4] = group_indices[1]; full_indices6[5] = group_indices[2]; }
                 else { full_indices6[0] = group_indices[0]; full_indices6[1] = group_indices[1]; full_indices6[2] = group_indices[2]; }
 
-                let points = calc_points(
-                    nightfarer,
-                    full_indices6,
-                    relics_normal,
-                    relics_deep,
-                    selected_bitmap,
-                    recommended_bitmap,
-                    &mut score_ctx,
-                );
+                if damage_mode && is_deep_group && combination_has_excluded_demerit(&full_indices6, relics_deep, excluded_demerits) { return; }
+
+                let points = if damage_mode {
+                    calc_damage(
+                        nightfarer,
+                        full_indices6,
+                        relics_normal,
+                        relics_deep,
+                        damage_mults,
+                        &mut score_ctx,
+                    )
+                } else {
+                    calc_points(
+                        nightfarer,
+                        full_indices6,
+                        relics_normal,
+                        relics_deep,
+                        selected_bitmap,
+                        recommended_bitmap,
+                        &mut score_ctx,
+                    )
+                };
 
                 let unique_key = pack_triple_key(group_indices);
                 if !local_seen.insert(unique_key) { return; }
@@ -421,6 +500,10 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     // Soft validation (avoid panics which produce unreachable)
     if input.selected_effects.len() > SELECTED_EFFECTS_SPACE || input.recommended_effects.len() > RECOMMENDED_EFFECTS_SPACE { return serde_wasm_bindgen::to_value(&SearchOutput { combinations: vec![], total_combinations_checked: 0 }).unwrap(); }
 
+    let damage_mode = input.damage_multipliers.is_some();
+    let damage_mults: Vec<f32> = input.damage_multipliers.clone().unwrap_or_default();
+    let excluded_demerits: Vec<u32> = input.excluded_demerit_keys.clone().unwrap_or_default();
+
     let mut selected_bitmap = [false; EFFECT_KEY_SPACE];
     for e in &input.selected_effects { let k = e.key as usize; if k < EFFECT_KEY_SPACE { unsafe { *selected_bitmap.get_unchecked_mut(k) = true; } } }
 
@@ -447,7 +530,16 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     let mut is_candidate_norm: Vec<bool> = vec![false; input.relics.len()];
     for (idx, relic) in input.relics.iter().enumerate() {
         let mut any_selected = false;
-        for e in &relic.effects { let k = e.key as usize; if k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; } }
+        for e in &relic.effects {
+            let k = e.key as usize;
+            if k >= EFFECT_KEY_SPACE { continue; }
+            if damage_mode {
+                if let Some(nf) = e.nightfarer { if nf != input.nightfarer { continue; } }
+                if damage_mults.get(k).copied().unwrap_or(1.0) > 1.0 { any_selected = true; break; }
+            } else {
+                if unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; }
+            }
+        }
         if any_selected { effect_candidates_norm.push(idx); unsafe { *is_candidate_norm.get_unchecked_mut(idx) = true; } }
     }
 
@@ -456,7 +548,16 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     let mut is_candidate_deep: Vec<bool> = vec![false; input.deep_relics.len()];
     for (idx, relic) in input.deep_relics.iter().enumerate() {
         let mut any_selected = false;
-        for e in &relic.effects { let k = e.key as usize; if k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; } }
+        for e in &relic.effects {
+            let k = e.key as usize;
+            if k >= EFFECT_KEY_SPACE { continue; }
+            if damage_mode {
+                if let Some(nf) = e.nightfarer { if nf != input.nightfarer { continue; } }
+                if damage_mults.get(k).copied().unwrap_or(1.0) > 1.0 { any_selected = true; break; }
+            } else {
+                if unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; }
+            }
+        }
         if any_selected { effect_candidates_deep.push(idx); unsafe { *is_candidate_deep.get_unchecked_mut(idx) = true; } }
     }
 
@@ -512,6 +613,9 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             nightfarer,
             &selected_bitmap,
             &recommended_bitmap,
+            damage_mode,
+            &damage_mults,
+            &excluded_demerits,
         );
         checked_local += checked_norm;
 
@@ -525,6 +629,9 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             nightfarer,
             &selected_bitmap,
             &recommended_bitmap,
+            damage_mode,
+            &damage_mults,
+            &excluded_demerits,
         );
         checked_local += checked_deep;
 
@@ -552,6 +659,9 @@ pub fn search_combinations(input: JsValue) -> JsValue {
                     &ranges_vec,
                     &selected_groups_by_key,
                     &selected_levels_by_key,
+                    damage_mode,
+                    &damage_mults,
+                    &excluded_demerits,
                 );
             }
         }
@@ -585,3 +695,51 @@ pub fn search_combinations(input: JsValue) -> JsValue {
 
 // Fallback empty vec for invalid colors in parallel loops
 static EMPTY_VEC: Vec<usize> = Vec::new();
+
+#[cfg(test)]
+mod damage_tests {
+    use super::*;
+    fn relic(effects: Vec<(u32, Option<bool>, Option<u8>)>) -> RelicSlot {
+        RelicSlot { color: Some(1), effects: effects.into_iter().map(|(key, stacks, nf)| Effect {
+            key, nightfarer: nf, stacks, group: None, level: None, startingBonus: None, r#type: None,
+        }).collect() }
+    }
+    fn mults(pairs: &[(usize, f32)]) -> Vec<f32> {
+        let mut m = vec![1.0f32; EFFECT_KEY_SPACE];
+        for &(k, v) in pairs { m[k] = v; }
+        m
+    }
+
+    #[test]
+    fn stacks_true_multiplies_each_occurrence() {
+        let normal = vec![relic(vec![(10, Some(true), None)]), relic(vec![(10, Some(true), None)])];
+        let deep: Vec<RelicSlot> = vec![];
+        let m = mults(&[(10, 1.1)]);
+        let idx: [Option<usize>;6] = [Some(0), Some(1), None, None, None, None];
+        let mut ctx = ScoreContext::new();
+        let p = calc_damage(0, idx, &normal, &deep, &m, &mut ctx);
+        assert!((p - 1.1f32 * 1.1f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn stacks_false_multiplies_once() {
+        let normal = vec![relic(vec![(10, Some(false), None)]), relic(vec![(10, Some(false), None)])];
+        let deep: Vec<RelicSlot> = vec![];
+        let m = mults(&[(10, 1.15)]);
+        let idx: [Option<usize>;6] = [Some(0), Some(1), None, None, None, None];
+        let mut ctx = ScoreContext::new();
+        let p = calc_damage(0, idx, &normal, &deep, &m, &mut ctx);
+        assert!((p - 1.15f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn nightfarer_mismatch_ignored_and_irrelevant_ignored() {
+        let normal = vec![relic(vec![(10, Some(true), Some(3)), (20, Some(true), None)])];
+        let deep: Vec<RelicSlot> = vec![];
+        let m = mults(&[(10, 1.5) /* nf-exclusive, wrong nf */]); // key 20 stays 1.0
+        let idx: [Option<usize>;6] = [Some(0), None, None, None, None, None];
+        let mut ctx = ScoreContext::new();
+        let p = calc_damage(0 /* nightfarer 0 != 3 */, idx, &normal, &deep, &m, &mut ctx);
+        assert!((p - 1.0f32).abs() < 1e-5);
+    }
+}
