@@ -5,11 +5,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import type { SaveFileData } from "../types/SaveFile";
 import { CharacterSlotSelect } from "./CharacterSlotSelect";
 import { ComboFinder } from "./ComboFinder";
+import { DamageOptimizer } from "./DamageOptimizer";
 import { RelicBrowser } from "./RelicBrowser";
 
 const enum TabIndex {
   RelicBrowser,
   ComboFinder,
+  DamageOptimizer,
 }
 
 interface RelicsPageProps {
@@ -113,6 +115,7 @@ export function RelicsPage({
         <Tabs value={tab} onChange={(_e, value) => setTab(value)} centered>
           <Tab value={TabIndex.RelicBrowser} label="Relic Browser" />
           <Tab value={TabIndex.ComboFinder} label="Combo Finder" />
+          <Tab value={TabIndex.DamageOptimizer} label="ダメージ最適化" />
         </Tabs>
       </AppBar>
       {tab === TabIndex.RelicBrowser && (
@@ -131,6 +134,9 @@ export function RelicsPage({
           currentSlot={currentSlot}
           selectSlot={selectSlot}
         />
+      )}
+      {tab === TabIndex.DamageOptimizer && (
+        <DamageOptimizer currentSlot={currentSlot} />
       )}
     </>
   );
