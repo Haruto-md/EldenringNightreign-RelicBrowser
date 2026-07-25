@@ -238,27 +238,62 @@ ${lines.join("\n")}
     deep.skills.deep,
     demerit.demerit_skills,
   ]);
+  // Case-insensitive fallback: RelicHub's `eng` text and the app's i18n.ts
+  // `en` text are supposed to describe the same effect but were transcribed
+  // independently, so they frequently differ only in capitalization (e.g.
+  // "Ghostflame Explosion" vs "ghostflame explosion"). An exact-match-only
+  // lookup silently drops every entry like that.
+  const engToJpnLower = new Map();
+  for (const [eng, jpn] of engToJpn) {
+    const lower = eng.toLowerCase();
+    if (!engToJpnLower.has(lower)) engToJpnLower.set(lower, jpn);
+  }
   const jaNameEntries = [];
   const effectKeyNamesAdded = new Set();
 
-  // First pass: from i18n.ts
+  // First pass: from i18n.ts, exact match then case-insensitive fallback
   for (const [eng, effectKeyName] of englishToEffectKeyName.entries()) {
-    const jpn = engToJpn.get(eng);
+    const jpn = engToJpn.get(eng) ?? engToJpnLower.get(eng.toLowerCase());
     if (jpn) {
       jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
       effectKeyNamesAdded.add(effectKeyName);
     }
   }
 
-  // Second pass: from MANUAL_EFFECT_KEY_OVERRIDES (for entries not already covered)
-  for (const [relicHubEngText, effectKeyName] of Object.entries(MANUAL_EFFECT_KEY_OVERRIDES)) {
-    if (!effectKeyNamesAdded.has(effectKeyName)) {
-      const jpn = engToJpn.get(relicHubEngText);
-      if (jpn) {
-        jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
-        effectKeyNamesAdded.add(effectKeyName);
-      }
+  // Second pass: from MANUAL_EFFECT_KEY_OVERRIDES (for entries not already
+  // covered). Override keys are usually RelicHub `jpn` text (the case that
+  // needed an override in the first place is that the `eng` text has no
+  // usable match in i18n.ts at all) — only one override key is English. Try
+  // the key as English first, then fall back to treating it as already being
+  // the Japanese name (verified against jpnToEng so we don't emit garbage).
+  for (const [overrideKey, effectKeyName] of Object.entries(MANUAL_EFFECT_KEY_OVERRIDES)) {
+    if (effectKeyNamesAdded.has(effectKeyName)) continue;
+    let jpn = engToJpn.get(overrideKey) ?? engToJpnLower.get(overrideKey.toLowerCase());
+    if (!jpn && jpnToEng.has(overrideKey)) {
+      jpn = overrideKey;
     }
+    if (jpn) {
+      jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
+      effectKeyNamesAdded.add(effectKeyName);
+    }
+  }
+
+  // Completeness check: dump every skills.json entry whose jpn name never
+  // made it into effectNamesJa, as a reference list for adding further
+  // MANUAL_EFFECT_KEY_OVERRIDES entries.
+  const jpnCovered = new Set(jaNameEntries.map((line) => {
+    const m = line.match(/: (".*"),$/);
+    return m ? JSON.parse(m[1]) : undefined;
+  }));
+  const uncoveredSkills = Object.values(skills.skills)
+    .flat()
+    .filter((s) => s.jpn && s.eng && !jpnCovered.has(s.jpn));
+  if (uncoveredSkills.length > 0) {
+    console.warn(
+      `\nWARNING: ${uncoveredSkills.length} skills.json entries have no effectNamesJa translation:\n` +
+        uncoveredSkills.map((s) => `  - [${s.id}] ${s.jpn}  (${s.eng})`).join("\n") +
+        "\n\nAdd entries to MANUAL_EFFECT_KEY_OVERRIDES (keyed by the jpn text above) and re-run if these are in scope.\n"
+    );
   }
   const effectNamesJaOut = `// GENERATED FILE — do not edit by hand.
 // Regenerate with: node scripts/generate-damage-multipliers.mjs
