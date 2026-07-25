@@ -264,6 +264,14 @@ fn calc_points(
     points
 }
 
+/// `calc_damage` indexes `multipliers` with `get_unchecked(k)` for k up to
+/// EFFECT_KEY_SPACE-1, which is only sound if `multipliers.len() >= EFFECT_KEY_SPACE`.
+/// Callers must check this before invoking `calc_damage`.
+#[inline(always)]
+fn damage_multipliers_valid(mults: &[f32]) -> bool {
+    mults.len() >= EFFECT_KEY_SPACE
+}
+
 #[inline(always)]
 fn calc_damage(
     nightfarer: u8,
@@ -502,6 +510,13 @@ pub fn search_combinations(input: JsValue) -> JsValue {
 
     let damage_mode = input.damage_multipliers.is_some();
     let damage_mults: Vec<f32> = input.damage_multipliers.clone().unwrap_or_default();
+    // Soft validation: `calc_damage` indexes `damage_mults` with `get_unchecked(k)` for
+    // k up to EFFECT_KEY_SPACE-1, relying on the Vec actually having that many elements.
+    // A shorter Vec supplied by the JS caller would be an out-of-bounds read (UB), not a
+    // panic, so reject it here before any scoring happens.
+    if damage_mode && !damage_multipliers_valid(&damage_mults) {
+        return serde_wasm_bindgen::to_value(&SearchOutput { combinations: vec![], total_combinations_checked: 0 }).unwrap();
+    }
     let excluded_demerits: Vec<u32> = input.excluded_demerit_keys.clone().unwrap_or_default();
 
     let mut selected_bitmap = [false; EFFECT_KEY_SPACE];
@@ -741,5 +756,23 @@ mod damage_tests {
         let mut ctx = ScoreContext::new();
         let p = calc_damage(0 /* nightfarer 0 != 3 */, idx, &normal, &deep, &m, &mut ctx);
         assert!((p - 1.0f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn damage_multipliers_valid_rejects_short_vec_and_accepts_full_vec() {
+        // A Vec shorter than EFFECT_KEY_SPACE must be rejected: calc_damage's
+        // get_unchecked(k) reads up to index EFFECT_KEY_SPACE-1, so anything shorter
+        // would be an out-of-bounds read (UB) rather than a panic.
+        let short = vec![1.0f32; EFFECT_KEY_SPACE - 1];
+        assert!(!damage_multipliers_valid(&short));
+
+        let empty: Vec<f32> = vec![];
+        assert!(!damage_multipliers_valid(&empty));
+
+        let full = vec![1.0f32; EFFECT_KEY_SPACE];
+        assert!(damage_multipliers_valid(&full));
+
+        let longer = vec![1.0f32; EFFECT_KEY_SPACE + 5];
+        assert!(damage_multipliers_valid(&longer));
     }
 }
