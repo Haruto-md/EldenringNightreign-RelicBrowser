@@ -58,4 +58,28 @@ describe("buildDamageMultiplierArray", () => {
     const a = buildDamageMultiplierArray({ ...base, nightfarer: Nightfarer.Wylder });
     expect(a[EffectKey.recluseCollectingAffinityResidueActivatesTerraMagica]).toBe(1);
   });
+
+  it("does NOT activate situational conditionals (weapon-type-3, status-enemy) — they must not inflate ranking", () => {
+    // A Recluse magic build must not be scored by unrelated weapon-type-3 or
+    // status-enemy conditionals; those are opt-in via the must-have filter only.
+    const a = buildDamageMultiplierArray({
+      ...base,
+      nightfarer: Nightfarer.Recluse,
+      primaryCategoryId: "sorcery",
+      element: "magic",
+    });
+    expect(a[EffectKey.improvedAttackPowerWith3PlusDaggersEquipped]).toBe(1);
+    expect(a[EffectKey.improvedAttackPowerWith3PlusStraightSwordsEquipped]).toBe(1);
+    expect(a[EffectKey.attackPowerUpWhenFacingPoisonAfflictedEnemy]).toBe(1);
+  });
+
+  it("activates sorcery/magic profile buckets for a magic sorcery build", () => {
+    const a = buildDamageMultiplierArray({
+      ...base,
+      nightfarer: Nightfarer.Recluse,
+      primaryCategoryId: "sorcery",
+      element: "magic",
+    });
+    expect(a[EffectKey.improvedAffinityAttackPower]).toBeGreaterThan(1);
+  });
 });
