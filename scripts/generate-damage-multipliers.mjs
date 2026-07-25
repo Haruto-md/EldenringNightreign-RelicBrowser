@@ -306,6 +306,27 @@ ${jaNameEntries.join("\n")}
   writeFileSync(join(ROOT, "src/resources/effectNamesJa.ts"), effectNamesJaOut, "utf-8");
   console.log(`Wrote ${jaNameEntries.length} entries to src/resources/effectNamesJa.ts`);
 
+  // Completeness dump: list every skills.json entry whose eng text produced no
+  // EffectKey match (the uncovered worklist for the English fallback).
+  const uncovered = [];
+  for (const genre of Object.values(skills.skills)) {
+    for (const s of genre) {
+      if (!s.eng) continue;
+      const matched =
+        englishToEffectKeyName.get(s.eng) ||
+        [...englishToEffectKeyName.keys()].find(
+          (k) => k.toLowerCase() === s.eng.toLowerCase()
+        );
+      if (!matched) uncovered.push(`  id ${s.id}: ${s.eng}  (${s.jpn})`);
+    }
+  }
+  if (uncovered.length > 0) {
+    console.warn(
+      `\n${uncovered.length} skills.json effect(s) have no EffectKey match ` +
+        `(English fallback will be used in UI):\n${uncovered.join("\n")}\n`
+    );
+  }
+
   // --- demeritEffects.ts : the individual demerit types with EffectKey ---
   const demeritEntries = [];
   const unmatchedDemerits = [];
