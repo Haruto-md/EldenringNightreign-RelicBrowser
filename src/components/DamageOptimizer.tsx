@@ -1,6 +1,7 @@
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Checkbox,
@@ -50,8 +51,6 @@ import { DamageRelicSlot } from "./DamageRelicSlot";
 // Persistent storage keys
 const SETTINGS_STORAGE_KEY = "damageOpt:settings:v1";
 const SELECTED_NIGHTFARER_STORAGE_KEY = "damageOpt:selectedNightfarer:v1";
-
-const DEBOUNCE_MS = 400;
 
 const DEFAULT_ELEMENT = "physical" as const;
 const DEFAULT_PRIMARY_CATEGORY_ID = primaryCategories[0]?.id ?? "weapon:dagger";
@@ -525,22 +524,6 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     current.excludedDemerits,
   ]);
 
-  // Debounce search triggering on rapid control changes
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      performSearch();
-    }, DEBOUNCE_MS);
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, [performSearch]);
-
   useEffect(() => {
     return () => {
       cancelCurrentSearch();
@@ -637,6 +620,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                 value={current.schoolId ?? ""}
                 onChange={handleSchoolChange}
               >
+                <MenuItem value="">なし</MenuItem>
                 {schoolOptions.map((school) => (
                   <MenuItem key={school.id} value={school.id}>
                     {schoolLabels[school.id] ?? school.id}
@@ -825,6 +809,15 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         }}
       >
         <Box sx={{ mb: 2, flexShrink: 0 }}>
+          <Button
+            variant="contained"
+            onClick={() => performSearch()}
+            disabled={isSearching || enabledVessels.length === 0}
+            fullWidth
+            sx={{ mb: 1 }}
+          >
+            {isSearching ? "検索中..." : "検索"}
+          </Button>
           <LinearProgress
             variant={isSearching ? "indeterminate" : "determinate"}
             color={isSearching ? "primary" : "success"}
