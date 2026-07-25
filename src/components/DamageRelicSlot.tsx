@@ -1,7 +1,7 @@
 import { Box, Card, CardContent, List, Typography, useTheme } from "@mui/material";
 import type { EffectKey } from "../resources/effectKeys";
 import type { RelicSlot } from "../types/SaveFile";
-import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
+import { getItemName, getRelicColor } from "../utils/DataUtils";
 import { effectNameJa } from "../utils/effectNameJa";
 import { RelicColorChip } from "./RelicColorChip";
 import { items, ItemType } from "../resources/items";
@@ -124,7 +124,7 @@ export function DamageRelicSlot(props: DamageRelicSlotProps) {
                       color: "#76adde",
                     }}
                   >
-                    {getEffectName(debuff)}
+                    {effectNameJa(debuff.key)}
                   </Typography>
                 )}
               </Box>

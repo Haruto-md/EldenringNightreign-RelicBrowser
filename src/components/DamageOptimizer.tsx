@@ -506,8 +506,13 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         set.add(i as EffectKey);
       }
     }
+    // Also highlight must-have effects (they may carry no damage multiplier but
+    // are the reason a combination was returned).
+    for (const mh of current.mustHaves) {
+      set.add(mh.effectKey as EffectKey);
+    }
     return set;
-  }, [multiplierArray]);
+  }, [multiplierArray, current.mustHaves]);
 
   const nightfarerData = nightfarers[selectedNightfarer];
 
