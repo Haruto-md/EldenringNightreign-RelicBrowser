@@ -249,6 +249,20 @@ ${lines.join("\n")}
   writeFileSync(join(ROOT, "src/resources/damageMultipliers.ts"), output, "utf-8");
   console.log(`Wrote ${entries.length} entries to src/resources/damageMultipliers.ts`);
 
+  // RelicHub's scraped Japanese text has transcription typos that disagree
+  // with its OWN canonical spellings (e.g. vessels.json spells the Recluse
+  // 隠者, but some skills.json entries mistype it 陰者). Normalize the known
+  // ones so generated display names are internally consistent. This is not
+  // translation — it only reconciles RelicHub against RelicHub.
+  const RELICHUB_JA_TYPO_FIXES = [["陰者", "隠者"]];
+  const normalizeRelicHubJa = (jpn) => {
+    let out = jpn;
+    for (const [wrong, right] of RELICHUB_JA_TYPO_FIXES) {
+      out = out.split(wrong).join(right);
+    }
+    return out;
+  };
+
   // --- effectNamesJa.ts : EffectKey -> Japanese name ---
   const engToJpn = buildEngToJpnLookup([
     ...Object.values(skills.skills),
@@ -272,7 +286,7 @@ ${lines.join("\n")}
   for (const [eng, effectKeyName] of englishToEffectKeyName.entries()) {
     const jpn = engToJpn.get(eng) ?? engToJpnLower.get(eng.toLowerCase());
     if (jpn) {
-      jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
+      jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(normalizeRelicHubJa(jpn))},`);
       effectKeyNamesAdded.add(effectKeyName);
     }
   }
@@ -290,7 +304,7 @@ ${lines.join("\n")}
       jpn = overrideKey;
     }
     if (jpn) {
-      jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
+      jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(normalizeRelicHubJa(jpn))},`);
       effectKeyNamesAdded.add(effectKeyName);
     }
   }
@@ -354,7 +368,7 @@ ${jaNameEntries.join("\n")}
       effectKeyName = MANUAL_EFFECT_KEY_OVERRIDES[d.eng] || MANUAL_EFFECT_KEY_OVERRIDES[d.jpn];
     }
     if (!effectKeyName) { unmatchedDemerits.push(d.eng); continue; }
-    demeritEntries.push(`  { key: EffectKey.${effectKeyName}, jaName: ${JSON.stringify(d.jpn)} },`);
+    demeritEntries.push(`  { key: EffectKey.${effectKeyName}, jaName: ${JSON.stringify(normalizeRelicHubJa(d.jpn))} },`);
   }
   if (unmatchedDemerits.length > 0) {
     console.error(`\nWARNING: ${unmatchedDemerits.length} demerit(s) had no EffectKey match:\n` +
