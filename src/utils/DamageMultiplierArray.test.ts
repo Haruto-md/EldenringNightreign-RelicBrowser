@@ -60,10 +60,17 @@ describe("buildDamageMultiplierArray", () => {
   });
 
   it("keeps a mismatched Nightfarer-exclusive effect at 1.0 even if enabled", () => {
-    const executorOnly = EffectKey.executorCharacterSkillBoostsAttackButDrainsHP;
-    const a = buildDamageMultiplierArray({
-      ...base, nightfarer: Nightfarer.Wylder, enabledSituational: new Set([executorOnly]),
+    const raiderEffect = EffectKey.raiderDamageTakenWhileUsingCharacterSkillImprovesAttack;
+    // With Wylder (non-Raider) and the conditionalGroup enabled, should stay 1.0
+    const wylderArray = buildDamageMultiplierArray({
+      ...base, nightfarer: Nightfarer.Wylder, enabledSituational: new Set([raiderEffect]),
     });
-    expect(a[executorOnly]).toBe(1);
+    expect(wylderArray[raiderEffect]).toBe(1);
+    // With Raider and the same conditionalGroup enabled, should activate to the real multiplier
+    const raiderArray = buildDamageMultiplierArray({
+      ...base, nightfarer: Nightfarer.Raider, enabledSituational: new Set([raiderEffect]),
+    });
+    expect(raiderArray[raiderEffect]).toBeCloseTo(
+      damageMultipliers[raiderEffect]!.multiplier, 5);
   });
 });

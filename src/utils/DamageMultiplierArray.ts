@@ -9,7 +9,7 @@ import { damageMultipliers } from "../resources/damageMultipliers";
 import { EffectKey } from "../resources/effectKeys";
 import { Nightfarer } from "./Nightfarers";
 
-export const EFFECT_KEY_ARRAY_LENGTH = 852;
+export const EFFECT_KEY_ARRAY_LENGTH = EffectKey.LENGTH;
 
 export interface DamageProfileSelection {
   nightfarer: Nightfarer;
