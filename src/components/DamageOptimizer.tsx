@@ -31,7 +31,6 @@ import {
 } from "../resources/damageCategories";
 import { demeritEffects } from "../resources/demeritEffects";
 import { EffectKey } from "../resources/effectKeys";
-import { effectsArray } from "../resources/effects";
 import { nightfarerNamesJa } from "../resources/nightfarerNamesJa";
 import { vesselNamesJa } from "../resources/vesselNamesJa";
 import { items, ItemType } from "../resources/items";
@@ -363,14 +362,26 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
 
   const showAttackModes = primaryCategory?.id.startsWith("weapon:") ?? false;
 
-  const mustHaveOptions = useMemo(
-    () =>
-      effectsArray.filter((e) => {
-        const nf = "nightfarer" in e ? e.nightfarer : undefined;
-        return nf === undefined || nf === selectedNightfarer;
-      }),
-    [selectedNightfarer]
-  );
+  // Must-have options are the effects actually present on the player's own
+  // relics (like ComboFinder), NOT the full effect enum. effectsArray contains
+  // non-relic effects too — e.g. innate character passives such as
+  // raiderPermanentlyIncreaseAttackPower — which can never appear on a relic and
+  // so must not be offerable as a must-have.
+  const mustHaveOptions = useMemo(() => {
+    const owned = currentSlot.relics.flatMap((relic) =>
+      relic.effects.flatMap(([effect, debuff]) =>
+        debuff !== undefined ? [effect, debuff] : [effect]
+      )
+    );
+    const unique = owned.filter(
+      (effect, index, arr) =>
+        arr.findIndex((e) => e.key === effect.key) === index
+    );
+    return unique.filter((e) => {
+      const nf = "nightfarer" in e ? e.nightfarer : undefined;
+      return nf === undefined || nf === selectedNightfarer;
+    });
+  }, [currentSlot.relics, selectedNightfarer]);
 
   const handlePrimaryCategoryChange = useCallback(
     (event: SelectChangeEvent<string>) => {
