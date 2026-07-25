@@ -437,4 +437,5 @@ export const effectNamesJa: Partial<Record<EffectKey, string>> = {
   [EffectKey.changesCompatibleArmamentsIncantationToOFlameAtStartOfExpedition]: "出撃時の武器の祈祷を「火よ！」にする",
   [EffectKey.changesCompatibleArmamentsIncantationToBeastClawAtStartOfExpedition]: "出撃時の武器の祈祷を「獣爪」にする",
   [EffectKey.changesCompatibleArmamentsIncantationToDragonfireAtStartOfExpedition]: "出撃時の武器の祈祷を「竜炎」にする",
+  [EffectKey.moreDamageTakenAfterEvasion]: "回避直後、カット率低下",
 };

@@ -239,9 +239,26 @@ ${lines.join("\n")}
     demerit.demerit_skills,
   ]);
   const jaNameEntries = [];
+  const effectKeyNamesAdded = new Set();
+
+  // First pass: from i18n.ts
   for (const [eng, effectKeyName] of englishToEffectKeyName.entries()) {
     const jpn = engToJpn.get(eng);
-    if (jpn) jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
+    if (jpn) {
+      jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
+      effectKeyNamesAdded.add(effectKeyName);
+    }
+  }
+
+  // Second pass: from MANUAL_EFFECT_KEY_OVERRIDES (for entries not already covered)
+  for (const [relicHubEngText, effectKeyName] of Object.entries(MANUAL_EFFECT_KEY_OVERRIDES)) {
+    if (!effectKeyNamesAdded.has(effectKeyName)) {
+      const jpn = engToJpn.get(relicHubEngText);
+      if (jpn) {
+        jaNameEntries.push(`  [EffectKey.${effectKeyName}]: ${JSON.stringify(jpn)},`);
+        effectKeyNamesAdded.add(effectKeyName);
+      }
+    }
   }
   const effectNamesJaOut = `// GENERATED FILE — do not edit by hand.
 // Regenerate with: node scripts/generate-damage-multipliers.mjs
