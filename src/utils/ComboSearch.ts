@@ -61,7 +61,7 @@ const pending = new Map<
     onProgress?: (p: ComboSearchProgress) => void;
     context: {
       enabledVessels: Vessel[];
-      data: ReturnType<typeof buildWorkerInput>;
+      data: ComboSearchWorkerInput;
     };
   }
 >();
@@ -191,27 +191,14 @@ export function cancelCurrentSearch(): void {
   }
 }
 
-export async function searchCombinations(
-  nightfarer: Nightfarer,
-  selectedEffects: Effect[],
-  relics: RelicSlot[],
-  deepRelics: RelicSlot[],
+function runWorkerSearch(
+  data: ComboSearchWorkerInput,
   enabledVessels: Vessel[],
-  selectedEffectEntries: SelectedEffectEntry[],
   onProgress?: (progress: ComboSearchProgress) => void
 ): Promise<ComboSearchResult> {
   // Single-flight: cancel any previous run before starting a new one.
   cancelCurrentSearch();
   const worker = getWorker();
-
-  const data = buildWorkerInput(
-    nightfarer,
-    selectedEffects,
-    relics,
-    deepRelics,
-    enabledVessels,
-    selectedEffectEntries
-  );
 
   return new Promise((resolve, reject) => {
     const id = ++nextRequestId;
@@ -232,6 +219,48 @@ export async function searchCombinations(
       reject(e);
     }
   });
+}
+
+export async function searchCombinations(
+  nightfarer: Nightfarer,
+  selectedEffects: Effect[],
+  relics: RelicSlot[],
+  deepRelics: RelicSlot[],
+  enabledVessels: Vessel[],
+  selectedEffectEntries: SelectedEffectEntry[],
+  onProgress?: (progress: ComboSearchProgress) => void
+): Promise<ComboSearchResult> {
+  const data = buildWorkerInput(
+    nightfarer,
+    selectedEffects,
+    relics,
+    deepRelics,
+    enabledVessels,
+    selectedEffectEntries
+  );
+
+  return runWorkerSearch(data, enabledVessels, onProgress);
+}
+
+export async function searchDamageCombinations(
+  nightfarer: Nightfarer,
+  normalRelics: RelicSlot[],
+  deepRelics: RelicSlot[],
+  enabledVessels: Vessel[],
+  multiplierArray: Float32Array,
+  excludedDemeritKeys: number[],
+  onProgress?: (progress: ComboSearchProgress) => void
+): Promise<ComboSearchResult> {
+  const data = buildDamageWorkerInput(
+    nightfarer,
+    normalRelics,
+    deepRelics,
+    enabledVessels,
+    multiplierArray,
+    excludedDemeritKeys
+  );
+
+  return runWorkerSearch(data, enabledVessels, onProgress);
 }
 
 function filterRelics(
@@ -311,6 +340,36 @@ function filterRelics(
   return filteredRelics;
 }
 
+// Damage-mode candidate filtering: keep any relic of a color used by an enabled
+// vessel slot, without requiring it to have a "selected" effect (damage mode has
+// no selected-effects concept). WASM's own candidate-bitmap logic (multiplier > 1.0)
+// narrows further.
+function filterRelicsByColor(
+  relics: RelicSlot[],
+  enabledVessels: Vessel[],
+  deepRelics: boolean
+): RelicSlot[] {
+  const vesselSlotIndices = deepRelics ? [3, 4, 5] : [0, 1, 2];
+  const enabledRelicColors = new Set(
+    vesselSlotIndices.flatMap((index) =>
+      enabledVessels.map((v) => v.slots[index])
+    )
+  );
+
+  return relics.filter((relic) => {
+    const item = items.get(relic.itemId);
+    if (
+      item === undefined ||
+      item.color === null ||
+      (!enabledRelicColors.has(item.color) &&
+        !enabledRelicColors.has(RelicSlotColor.Any))
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function filterRecommendedEffects(
   nightfarer: Nightfarer,
   selectedEffects: Effect[]
@@ -363,5 +422,26 @@ export function buildWorkerInput(
     ),
     enabledVessels,
     selectedEffectRanges: selectedEffectEntries,
+  };
+}
+
+export function buildDamageWorkerInput(
+  nightfarer: Nightfarer,
+  normalRelics: RelicSlot[],
+  deepRelics: RelicSlot[],
+  enabledVessels: Vessel[],
+  multiplierArray: Float32Array,
+  excludedDemeritKeys: number[]
+): ComboSearchWorkerInput {
+  return {
+    nightfarer,
+    selectedEffects: [],
+    recommendedEffects: [],
+    relics: filterRelicsByColor(normalRelics, enabledVessels, false),
+    deepRelics: filterRelicsByColor(deepRelics, enabledVessels, true),
+    enabledVessels,
+    selectedEffectRanges: [],
+    damageMultipliers: Array.from(multiplierArray),
+    excludedDemeritKeys,
   };
 }
