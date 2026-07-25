@@ -149,4 +149,83 @@ describe("ComboSearch damage mode", () => {
       expect(combo.relic_indices[5] ?? null).toBeNull();
     }
   });
+
+  it("requires must-have effect in combinations via effect ranges", () => {
+    const meleeEffect = getEffectByKey(EffectKey.improvedMeleeAttackPower);
+    assert(meleeEffect !== undefined);
+    const irrelevantEffect = getEffectByKey(EffectKey.strengthPlus1);
+    assert(irrelevantEffect !== undefined);
+
+    const RED_ITEM_ID = 102;
+
+    // Create normal relics: 2 with melee effect, 1 without
+    const normalRelics: RelicSlot[] = [
+      makeRelic(RED_ITEM_ID, meleeEffect),
+      makeRelic(RED_ITEM_ID, meleeEffect),
+      makeRelic(RED_ITEM_ID, irrelevantEffect),
+    ];
+    // Deep relics: 1 with melee, 1 without
+    const deepRelics: RelicSlot[] = [
+      makeRelic(RED_ITEM_ID, meleeEffect),
+      makeRelic(RED_ITEM_ID, irrelevantEffect),
+    ];
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+    multiplierArray[EffectKey.improvedMeleeAttackPower] = 1.05;
+
+    // Require must-have: at least 1 stack of melee attack power
+    const effectRanges = [
+      {
+        effectKey: EffectKey.improvedMeleeAttackPower,
+        minStacks: 1,
+        maxStacks: 99,
+      },
+    ];
+
+    const workerInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      normalRelics,
+      deepRelics,
+      [vessel],
+      multiplierArray,
+      [],
+      effectRanges
+    );
+    const input = buildWasmInput(workerInput);
+    const result = search_combinations(input) as {
+      combinations: Array<{
+        relic_indices: (number | null)[];
+        points: number;
+      }>;
+    };
+
+    // Every combination must include at least one relic with the melee effect
+    expect(result.combinations.length).toBeGreaterThan(0);
+    for (const combo of result.combinations) {
+      const hasRequiredEffect = combo.relic_indices.some((relicIndex) => {
+        if (relicIndex === null) return false;
+        // Check if this relic carries the melee effect
+        const relic =
+          relicIndex < normalRelics.length
+            ? normalRelics[relicIndex]
+            : deepRelics[relicIndex - normalRelics.length];
+        return relic.effects.some(([effect]) =>
+          effect ? effect.key === EffectKey.improvedMeleeAttackPower : false
+        );
+      });
+      expect(hasRequiredEffect).toBe(true);
+    }
+  });
 });

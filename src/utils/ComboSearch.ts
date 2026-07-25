@@ -249,6 +249,7 @@ export async function searchDamageCombinations(
   enabledVessels: Vessel[],
   multiplierArray: Float32Array,
   excludedDemeritKeys: number[],
+  effectRanges: SelectedEffectEntry[] = [],
   onProgress?: (progress: ComboSearchProgress) => void
 ): Promise<ComboSearchResult> {
   const data = buildDamageWorkerInput(
@@ -257,7 +258,8 @@ export async function searchDamageCombinations(
     deepRelics,
     enabledVessels,
     multiplierArray,
-    excludedDemeritKeys
+    excludedDemeritKeys,
+    effectRanges
   );
 
   return runWorkerSearch(data, enabledVessels, onProgress);
@@ -431,7 +433,8 @@ export function buildDamageWorkerInput(
   deepRelics: RelicSlot[],
   enabledVessels: Vessel[],
   multiplierArray: Float32Array,
-  excludedDemeritKeys: number[]
+  excludedDemeritKeys: number[],
+  effectRanges: SelectedEffectEntry[] = []
 ): ComboSearchWorkerInput {
   return {
     nightfarer,
@@ -440,7 +443,7 @@ export function buildDamageWorkerInput(
     relics: filterRelicsByColor(normalRelics, enabledVessels, false),
     deepRelics: filterRelicsByColor(deepRelics, enabledVessels, true),
     enabledVessels,
-    selectedEffectRanges: [],
+    selectedEffectRanges: effectRanges,
     damageMultipliers: Array.from(multiplierArray),
     excludedDemeritKeys,
   };
