@@ -984,7 +984,8 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                           <Card elevation={2}>
                             <CardContent>
                               <Typography fontWeight="bold" gutterBottom>
-                                {combo.vessel.name}
+                                {vesselNamesJa[combo.vessel.name] ??
+                                  combo.vessel.name}
                               </Typography>
                               <Typography
                                 variant="body2"
