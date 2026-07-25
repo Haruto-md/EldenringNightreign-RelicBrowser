@@ -1,8 +1,8 @@
 import { Box, Card, CardContent, List, Typography, useTheme } from "@mui/material";
 import type { EffectKey } from "../resources/effectKeys";
-import { effectNamesJa } from "../resources/effectNamesJa";
 import type { RelicSlot } from "../types/SaveFile";
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
+import { effectNameJa } from "../utils/effectNameJa";
 import { RelicColorChip } from "./RelicColorChip";
 import { items, ItemType } from "../resources/items";
 
@@ -99,9 +99,7 @@ export function DamageRelicSlot(props: DamageRelicSlotProps) {
             const effectKey = effect.key;
             const isHighlighted = highlightedEffectKeys.has(effectKey);
 
-            // Get Japanese name from effectNamesJa, fallback to getEffectName
-            const effectNameJa =
-              effectNamesJa[effectKey] ?? getEffectName(effect);
+            const effectLabel = effectNameJa(effectKey);
 
             return (
               <Box key={index} sx={{ mb: 0.5, display: "list-item" }}>
@@ -116,7 +114,7 @@ export function DamageRelicSlot(props: DamageRelicSlotProps) {
                     transition: "color 0.2s ease, font-weight 0.2s ease",
                   }}
                 >
-                  {effectNameJa}
+                  {effectLabel}
                 </Typography>
                 {debuff && (
                   <Typography

@@ -1,3 +1,4 @@
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   Alert,
   Box,
@@ -9,6 +10,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputLabel,
   LinearProgress,
   MenuItem,
@@ -29,7 +31,9 @@ import {
 } from "../resources/damageCategories";
 import { demeritEffects } from "../resources/demeritEffects";
 import { EffectKey } from "../resources/effectKeys";
-import { effectNamesJa } from "../resources/effectNamesJa";
+import { effectsArray } from "../resources/effects";
+import { nightfarerNamesJa } from "../resources/nightfarerNamesJa";
+import { vesselNamesJa } from "../resources/vesselNamesJa";
 import { items, ItemType } from "../resources/items";
 import type { CharacterSlot } from "../types/SaveFile";
 import {
@@ -37,20 +41,23 @@ import {
   searchDamageCombinations,
   type ComboSearchProgress,
   type ComboSearchResult,
+  type SelectedEffectEntry,
 } from "../utils/ComboSearch";
 import {
   buildDamageMultiplierArray,
-  situationalEffectsForNightfarer,
   type DamageProfileSelection,
 } from "../utils/DamageMultiplierArray";
-import { getEffectByKey, getEffectName } from "../utils/DataUtils";
+import { effectNameJa } from "../utils/effectNameJa";
 import { getChipColor, RelicSlotColor } from "../utils/RelicColor";
 import { isNightfarer, Nightfarer, nightfarers } from "../utils/Nightfarers";
 import { DamageRelicSlot } from "./DamageRelicSlot";
+import { EffectsAutocomplete } from "./EffectsAutocomplete";
 
 // Persistent storage keys
-const SETTINGS_STORAGE_KEY = "damageOpt:settings:v1";
+const SETTINGS_STORAGE_KEY = "damageOpt:settings:v2";
 const SELECTED_NIGHTFARER_STORAGE_KEY = "damageOpt:selectedNightfarer:v1";
+
+const MIN_STACKS_OPTIONS = [1, 2, 3, 4, 5, 6];
 
 const DEFAULT_ELEMENT = "physical" as const;
 const DEFAULT_PRIMARY_CATEGORY_ID = primaryCategories[0]?.id ?? "weapon:dagger";
@@ -140,12 +147,17 @@ const attackModeLabels: Record<string, string> = {
 
 // Settings ---------------------------------------------------------------
 
+interface MustHaveEntry {
+  effectKey: number;
+  minStacks: number;
+}
+
 interface DamageOptSettings {
   primaryCategoryId: string;
   schoolId?: string;
   element: "physical" | "magic" | "fire" | "lightning" | "holy";
   enabledAttackModes: string[];
-  enabledSituational: number[];
+  mustHaves: MustHaveEntry[];
   excludedDemerits: number[];
   disabledVessels: string[];
 }
@@ -156,7 +168,7 @@ function createDefaultSettings(): DamageOptSettings {
     schoolId: undefined,
     element: DEFAULT_ELEMENT,
     enabledAttackModes: [],
-    enabledSituational: [],
+    mustHaves: [],
     excludedDemerits: [],
     disabledVessels: [],
   };
@@ -185,6 +197,37 @@ function sanitizeStringArray(value: unknown): string[] {
     return [];
   }
   return value.filter((v): v is string => typeof v === "string");
+}
+
+function clampMinStacks(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(6, Math.max(1, Math.round(value)));
+}
+
+function sanitizeMustHaves(value: unknown): MustHaveEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: MustHaveEntry[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const effectKeyRaw = (entry as { effectKey?: unknown }).effectKey;
+    const minStacksRaw = (entry as { minStacks?: unknown }).minStacks;
+    const effectKey =
+      typeof effectKeyRaw === "number" ? effectKeyRaw : Number(effectKeyRaw);
+    if (!Number.isFinite(effectKey)) {
+      continue;
+    }
+    const minStacks = clampMinStacks(
+      typeof minStacksRaw === "number" ? minStacksRaw : Number(minStacksRaw)
+    );
+    out.push({ effectKey, minStacks });
+  }
+  return out;
 }
 
 function loadSettingsFromStorage(): Record<Nightfarer, DamageOptSettings> {
@@ -221,9 +264,7 @@ function loadSettingsFromStorage(): Record<Nightfarer, DamageOptSettings> {
       current.enabledAttackModes = sanitizeStringArray(
         val.enabledAttackModes
       );
-      current.enabledSituational = sanitizeNumberArray(
-        val.enabledSituational
-      );
+      current.mustHaves = sanitizeMustHaves(val.mustHaves);
       current.excludedDemerits = sanitizeNumberArray(val.excludedDemerits);
       current.disabledVessels = sanitizeStringArray(val.disabledVessels);
     });
@@ -322,8 +363,12 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
 
   const showAttackModes = primaryCategory?.id.startsWith("weapon:") ?? false;
 
-  const situationalEffects = useMemo(
-    () => situationalEffectsForNightfarer(selectedNightfarer),
+  const mustHaveOptions = useMemo(
+    () =>
+      effectsArray.filter((e) => {
+        const nf = "nightfarer" in e ? e.nightfarer : undefined;
+        return nf === undefined || nf === selectedNightfarer;
+      }),
     [selectedNightfarer]
   );
 
@@ -370,17 +415,39 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     [updateCurrent]
   );
 
-  const toggleSituational = useCallback(
-    (key: EffectKey) => {
+  const addMustHave = useCallback(
+    (effectKey: EffectKey) => {
       updateCurrent((s) => {
-        const has = s.enabledSituational.includes(key);
+        if (s.mustHaves.some((m) => m.effectKey === effectKey)) {
+          return s;
+        }
         return {
           ...s,
-          enabledSituational: has
-            ? s.enabledSituational.filter((k) => k !== key)
-            : [...s.enabledSituational, key],
+          mustHaves: [...s.mustHaves, { effectKey, minStacks: 1 }],
         };
       });
+    },
+    [updateCurrent]
+  );
+
+  const removeMustHave = useCallback(
+    (effectKey: number) => {
+      updateCurrent((s) => ({
+        ...s,
+        mustHaves: s.mustHaves.filter((m) => m.effectKey !== effectKey),
+      }));
+    },
+    [updateCurrent]
+  );
+
+  const setMustHaveMinStacks = useCallback(
+    (effectKey: number, minStacks: number) => {
+      updateCurrent((s) => ({
+        ...s,
+        mustHaves: s.mustHaves.map((m) =>
+          m.effectKey === effectKey ? { ...m, minStacks } : m
+        ),
+      }));
     },
     [updateCurrent]
   );
@@ -423,9 +490,6 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
       schoolId: current.schoolId,
       element: current.element,
       enabledAttackModes: new Set(current.enabledAttackModes),
-      enabledSituational: new Set(
-        current.enabledSituational as EffectKey[]
-      ),
     }),
     [selectedNightfarer, current]
   );
@@ -485,6 +549,14 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         (r) => items.get(r.itemId)?.type === ItemType.DeepRelic
       );
 
+      const effectRanges: SelectedEffectEntry[] = current.mustHaves.map(
+        (m) => ({
+          effectKey: m.effectKey,
+          minStacks: m.minStacks,
+          maxStacks: 6,
+        })
+      );
+
       const result = await searchDamageCombinations(
         selectedNightfarer,
         normalRelics,
@@ -492,6 +564,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         enabledVessels,
         multiplierArray,
         current.excludedDemerits,
+        effectRanges,
         (p: ComboSearchProgress) => {
           if (myRunId === runIdRef.current) {
             setProgress(p);
@@ -522,6 +595,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     enabledVessels,
     multiplierArray,
     current.excludedDemerits,
+    current.mustHaves,
   ]);
 
   useEffect(() => {
@@ -586,7 +660,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                 const k = Number(key) as Nightfarer;
                 return (
                   <MenuItem key={key} value={String(k)}>
-                    {nightfarers[k].name}
+                    {nightfarerNamesJa[k]}
                   </MenuItem>
                 );
               })}
@@ -671,34 +745,66 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
             </Box>
           )}
 
-          {situationalEffects.length > 0 && (
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                状況効果
-              </Typography>
-              <Stack sx={{ maxHeight: 260, overflowY: "auto" }}>
-                {situationalEffects.map(({ key }) => {
-                  const effect = getEffectByKey(key);
-                  const label =
-                    effectNamesJa[key] ??
-                    (effect ? getEffectName(effect) : String(key));
-                  return (
-                    <FormControlLabel
-                      key={key}
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={current.enabledSituational.includes(key)}
-                          onChange={() => toggleSituational(key)}
-                        />
-                      }
-                      label={label}
-                    />
-                  );
-                })}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              必須効果
+            </Typography>
+            <EffectsAutocomplete
+              onSearchChange={() => {}}
+              onChange={(effect) => addMustHave(effect.key)}
+              availableEffects={mustHaveOptions}
+              placeholder="効果を検索..."
+              getLabel={(key) => effectNameJa(key)}
+              clearOnSelect
+            />
+            {current.mustHaves.length > 0 && (
+              <Stack sx={{ mt: 1, maxHeight: 260, overflowY: "auto" }}>
+                {current.mustHaves.map((mustHave) => (
+                  <Box
+                    key={mustHave.effectKey}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      py: 0.5,
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{ flex: 1, minWidth: 0 }}
+                      noWrap
+                    >
+                      {effectNameJa(mustHave.effectKey as EffectKey)}
+                    </Typography>
+                    <FormControl size="small" sx={{ minWidth: 72 }}>
+                      <Select
+                        value={String(mustHave.minStacks)}
+                        onChange={(e) =>
+                          setMustHaveMinStacks(
+                            mustHave.effectKey,
+                            Number(e.target.value)
+                          )
+                        }
+                      >
+                        {MIN_STACKS_OPTIONS.map((n) => (
+                          <MenuItem key={n} value={String(n)}>
+                            {n}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <IconButton
+                      size="small"
+                      aria-label="削除"
+                      onClick={() => removeMustHave(mustHave.effectKey)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
               </Stack>
-            </Box>
-          )}
+            )}
+          </Box>
 
           <Box>
             <Typography variant="subtitle2" gutterBottom>
@@ -757,7 +863,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                           variant="body2"
                           sx={{ mb: 0.5 }}
                         >
-                          {vessel.name}
+                          {vesselNamesJa[vessel.name] ?? vessel.name}
                         </Typography>
                         <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
                           {vessel.slots.map((color, idx) => (

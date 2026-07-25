@@ -19,6 +19,7 @@ interface EffectsAutocompleteProps {
   placeholder: string;
   showOrBetterLabels?: boolean;
   clearOnSelect?: boolean;
+  getLabel?: (effectKey: number) => string;
 }
 
 export function EffectsAutocomplete({
@@ -28,6 +29,7 @@ export function EffectsAutocomplete({
   placeholder,
   showOrBetterLabels = false,
   clearOnSelect = false,
+  getLabel,
 }: EffectsAutocompleteProps) {
   const { t } = useTranslation();
   const [inputValue, setInputValue] = useState("");
@@ -36,7 +38,7 @@ export function EffectsAutocomplete({
     (option: string) => {
       const effectKey = parseInt(option);
       if (isEffectKey(effectKey)) {
-        const label = t(`effects.${effectKey}`);
+        const label = getLabel ? getLabel(effectKey) : t(`effects.${effectKey}`);
         const effect = getEffectByKey(effectKey);
         if (
           showOrBetterLabels &&
@@ -50,7 +52,7 @@ export function EffectsAutocomplete({
       }
       return option;
     },
-    [showOrBetterLabels, t]
+    [showOrBetterLabels, t, getLabel]
   );
 
   return (
