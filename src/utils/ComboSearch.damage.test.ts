@@ -215,7 +215,7 @@ describe("ComboSearch damage mode", () => {
     expect(result.combinations.length).toBeGreaterThan(0);
     for (const combo of result.combinations) {
       const hasRequiredEffect = combo.relic_indices.some((relicIndex) => {
-        if (relicIndex === null) return false;
+        if (relicIndex === null) {return false;}
         // Check if this relic carries the melee effect
         const relic =
           relicIndex < normalRelics.length
