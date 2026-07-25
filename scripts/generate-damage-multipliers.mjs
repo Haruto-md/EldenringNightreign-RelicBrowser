@@ -14,9 +14,15 @@ const ROOT = resolve(__dirname, "..");
 
 // Maps each RelicHub DAMAGE_MAP `target` string (for entries NOT covered by
 // ALL_ATK_GROUPS) to a stable bucket id used by the app's calculation engine
-// and taxonomy (src/resources/damageCategories.ts). There are exactly 60
-// unique targets among the 92 "universal" (non-conditional, non-null-multiplier)
+// and taxonomy (src/resources/damageCategories.ts). There are exactly 57
+// unique targets among the 89 "universal" (non-conditional, non-null-multiplier)
 // DAMAGE_MAP entries; every one of them must appear here.
+//
+// Three targets are deliberately excluded: 刺突カウンターを強化,
+// 魔力攻撃力を強化, 妖刀の攻撃を強化. These are character-exclusive
+// effects that don't map to any real bucket in the taxonomy — they're routed
+// to conditionalGroup "characterExclusive" instead (see
+// ORPHAN_TARGET_TO_CONDITIONAL_GROUP below) so they still activate.
 const BUCKET_MAP = {
   近接攻撃力上昇: "melee",
   戦技攻撃力上昇: "weaponSkill",
@@ -38,9 +44,6 @@ const BUCKET_MAP = {
   獣の祈祷を強化: "incantationSchool:bestial",
   狂い火の祈祷を強化: "incantationSchool:frenziedFlame",
   竜餐の祈祷を強化: "incantationSchool:dragonCommunion",
-  刺突カウンターを強化: "ironeyeThrustCounter",
-  魔力攻撃力を強化: "recluseLandOfSorcery",
-  妖刀の攻撃を強化: "executorKatanaBoost",
   短剣の攻撃力上昇: "weapon:dagger",
   直剣の攻撃力上昇: "weapon:straightSword",
   大剣の攻撃力上昇: "weapon:greatsword",
@@ -78,6 +81,14 @@ const BUCKET_MAP = {
   投擲ナイフの攻撃力上昇: "thrownKnife",
   "輝石、重力石アイテムの攻撃力上昇": "glintstoneGravityItem",
   調香術強化: "perfumeBottle",
+};
+
+// The three orphan targets called out above: routed to conditionalGroup
+// "characterExclusive" (no bucket) instead of BUCKET_MAP.
+const ORPHAN_TARGET_TO_CONDITIONAL_GROUP = {
+  刺突カウンターを強化: "characterExclusive",
+  魔力攻撃力を強化: "characterExclusive",
+  妖刀の攻撃を強化: "characterExclusive",
 };
 
 // Maps RelicHub's DAMAGE_MAP `character` field (Japanese) to the app's
@@ -174,13 +185,16 @@ function main() {
       continue;
     }
 
-    const conditionalGroup = groupOfKey.get(jpnKey);
+    let conditionalGroup = groupOfKey.get(jpnKey);
     let bucket;
     if (!conditionalGroup) {
-      bucket = BUCKET_MAP[data.target];
-      if (!bucket) {
-        missingBucket.push(`${jpnKey} (target: ${data.target})`);
-        continue;
+      conditionalGroup = ORPHAN_TARGET_TO_CONDITIONAL_GROUP[data.target];
+      if (!conditionalGroup) {
+        bucket = BUCKET_MAP[data.target];
+        if (!bucket) {
+          missingBucket.push(`${jpnKey} (target: ${data.target})`);
+          continue;
+        }
       }
     }
 

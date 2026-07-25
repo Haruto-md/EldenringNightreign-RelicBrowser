@@ -17,7 +17,6 @@ export interface DamageProfileSelection {
   schoolId?: string;
   element: "physical" | "magic" | "fire" | "lightning" | "holy";
   enabledAttackModes: ReadonlySet<string>;
-  enabledSituational: ReadonlySet<EffectKey>;
 }
 
 function activeBuckets(sel: DamageProfileSelection): Set<string> {
@@ -58,27 +57,10 @@ export function buildDamageMultiplierArray(sel: DamageProfileSelection): Float32
     const entry = damageMultipliers[key];
     if (!entry) {continue;}
     if (entry.nightfarer !== undefined && entry.nightfarer !== sel.nightfarer) {continue;}
-    let active = false;
-    if (entry.conditionalGroup !== undefined) {
-      active = sel.enabledSituational.has(key);
-    } else if (entry.bucket !== undefined) {
-      active = buckets.has(entry.bucket);
-    }
+    const active =
+      entry.conditionalGroup !== undefined ||
+      (entry.bucket !== undefined && buckets.has(entry.bucket));
     if (active && key < EFFECT_KEY_ARRAY_LENGTH) {arr[key] = entry.multiplier;}
   }
   return arr;
-}
-
-export function situationalEffectsForNightfarer(
-  nf: Nightfarer
-): { key: EffectKey; groupId: string }[] {
-  const out: { key: EffectKey; groupId: string }[] = [];
-  for (const keyStr of Object.keys(damageMultipliers)) {
-    const key = Number(keyStr) as EffectKey;
-    const entry = damageMultipliers[key];
-    if (!entry || entry.conditionalGroup === undefined) {continue;}
-    if (entry.nightfarer !== undefined && entry.nightfarer !== nf) {continue;}
-    out.push({ key, groupId: entry.conditionalGroup });
-  }
-  return out;
 }

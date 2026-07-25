@@ -13,7 +13,6 @@ const base: DamageProfileSelection = {
   primaryCategoryId: "weapon:greatsword",
   element: "physical",
   enabledAttackModes: new Set(),
-  enabledSituational: new Set(),
 };
 
 describe("buildDamageMultiplierArray", () => {
@@ -50,27 +49,13 @@ describe("buildDamageMultiplierArray", () => {
     expect(on[EffectKey.improvedSkillAttackPower]).toBeGreaterThan(1);
   });
 
-  it("activates a situational effect only when its key is enabled", () => {
-    const off = buildDamageMultiplierArray(base);
-    expect(off[EffectKey.takingAttacksImprovesAttackPower]).toBe(1);
-    const on = buildDamageMultiplierArray({
-      ...base, enabledSituational: new Set([EffectKey.takingAttacksImprovesAttackPower]),
-    });
-    expect(on[EffectKey.takingAttacksImprovesAttackPower]).toBeGreaterThan(1);
+  it("activates a conditional/character damage effect for its Nightfarer without any toggle", () => {
+    const a = buildDamageMultiplierArray({ ...base, nightfarer: Nightfarer.Recluse });
+    expect(a[EffectKey.recluseCollectingAffinityResidueActivatesTerraMagica]).toBeGreaterThan(1);
   });
 
-  it("keeps a mismatched Nightfarer-exclusive effect at 1.0 even if enabled", () => {
-    const raiderEffect = EffectKey.raiderDamageTakenWhileUsingCharacterSkillImprovesAttack;
-    // With Wylder (non-Raider) and the conditionalGroup enabled, should stay 1.0
-    const wylderArray = buildDamageMultiplierArray({
-      ...base, nightfarer: Nightfarer.Wylder, enabledSituational: new Set([raiderEffect]),
-    });
-    expect(wylderArray[raiderEffect]).toBe(1);
-    // With Raider and the same conditionalGroup enabled, should activate to the real multiplier
-    const raiderArray = buildDamageMultiplierArray({
-      ...base, nightfarer: Nightfarer.Raider, enabledSituational: new Set([raiderEffect]),
-    });
-    expect(raiderArray[raiderEffect]).toBeCloseTo(
-      damageMultipliers[raiderEffect]!.multiplier, 5);
+  it("keeps a mismatched Nightfarer-exclusive effect at 1.0", () => {
+    const a = buildDamageMultiplierArray({ ...base, nightfarer: Nightfarer.Wylder });
+    expect(a[EffectKey.recluseCollectingAffinityResidueActivatesTerraMagica]).toBe(1);
   });
 });
