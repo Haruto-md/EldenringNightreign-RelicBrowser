@@ -1,5 +1,6 @@
 import { Box, Typography } from "@mui/material";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import { items, ItemType, unsellableItemIds } from "../resources/items";
 import type { CharacterSlot } from "../types/SaveFile";
@@ -33,6 +34,7 @@ export function RelicBrowser({
   setSearchTerm,
   handleMatchingRelicsCountChange,
 }: RelicBrowserProps) {
+  const { t } = useTranslation();
   const [filterSell, setFilterSell] = useState(false);
   const [colorFilter, setColorFilter] = useState<ColorFilterOption>(
     colorFilterOptions[0]
@@ -147,8 +149,17 @@ export function RelicBrowser({
 
       <Typography variant="subtitle2" textAlign="center" gutterBottom>
         {currentSlot.relics.length === matchingRelics.length
-          ? `Showing all ${normalRelicsCount} relics and ${deepRelicsCount} deep relics on character ${currentSlot.name}`
-          : `Showing ${normalRelicsCount} matching relics and ${deepRelicsCount} matching deep relics out of ${currentSlot.relics.length} on character ${currentSlot.name}`}
+          ? t("showingAllRelicsTemplate", {
+              normal: normalRelicsCount,
+              deep: deepRelicsCount,
+              character: currentSlot.name,
+            })
+          : t("showingMatchingRelicsTemplate", {
+              normal: normalRelicsCount,
+              deep: deepRelicsCount,
+              total: currentSlot.relics.length,
+              character: currentSlot.name,
+            })}
       </Typography>
 
       {currentSlot && (

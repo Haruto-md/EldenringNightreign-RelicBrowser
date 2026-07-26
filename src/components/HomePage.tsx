@@ -105,7 +105,7 @@ export function HomePage({ onLoadDemo, loading }: HomePageProps) {
               <li>Browse all relics across multiple character slots</li>
               <li>
                 Find the best relics for the effects you are looking for using
-                the <b>Combo Finder</b>
+                powerful search filters
               </li>
               <li>
                 Detect outclassed and duplicate relics that should be sold

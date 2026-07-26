@@ -40,6 +40,10 @@ const resources = {
       duplicateText: "This relic is a duplicate.",
       relicComparisonTitle: "Relic Comparison",
       closeButton: "Close",
+      showingAllRelicsTemplate:
+        "Showing all {{normal}} relics and {{deep}} deep relics on character {{character}}",
+      showingMatchingRelicsTemplate:
+        "Showing {{normal}} matching relics and {{deep}} matching deep relics out of {{total}} on character {{character}}",
 
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",
@@ -1629,6 +1633,10 @@ const resources = {
       duplicateText: "このリリックは重複しています。",
       relicComparisonTitle: "リリック比較",
       closeButton: "閉じる",
+      showingAllRelicsTemplate:
+        "{{character}}の全{{normal}}件のリリックと{{deep}}件の深層遺物を表示中",
+      showingMatchingRelicsTemplate:
+        "{{character}}の全{{total}}件中、条件に一致する{{normal}}件のリリックと{{deep}}件の深層遺物を表示中",
       nightfarers: {
         [Nightfarer.Wylder]: "追跡者",
         [Nightfarer.Guardian]: "守護者",
