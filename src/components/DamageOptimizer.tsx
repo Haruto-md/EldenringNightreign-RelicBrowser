@@ -363,7 +363,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
   const showAttackModes = primaryCategory?.id.startsWith("weapon:") ?? false;
 
   // Must-have options are the effects actually present on the player's own
-  // relics (like ComboFinder), NOT the full effect enum. effectsArray contains
+  // relics, NOT the full effect enum. effectsArray contains
   // non-relic effects too — e.g. innate character passives such as
   // raiderPermanentlyIncreaseAttackPower — which can never appear on a relic and
   // so must not be offerable as a must-have.
