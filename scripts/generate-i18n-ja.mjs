@@ -15,7 +15,13 @@ const ROOT = resolve(__dirname, "..");
 // Distinct from generate-effect-categories.mjs's MANUAL_EFFECT_KEY_OVERRIDES:
 // that table is about RelicHub skill -> category, this one is about RelicHub
 // skill -> the specific EffectKey this i18n generator should attach the jpn text to.
-export const MANUAL_JA_EFFECT_OVERRIDES = {};
+export const MANUAL_JA_EFFECT_OVERRIDES = {
+  "ジェスチャー「あぐら」により、発狂が蓄積": "gestureCrossedLegsBuildsUpMadness",
+  "ガード成功時、HPを回復": "hpRecoveryFromSuccessfulGuarding",
+  "【学者】スキル使用時、対象に含まれた味方の攻撃力上昇": "scholarAlliesTargetedByCharacterSkillGainBoostedAttack",
+  "【学者】スキルを自身に使用時、FP消費軽減": "scholarReducedFpConsumptionWhenUsingCharacterSkillOnSelf",
+  "【学者】スキルの進捗率の低下を抑制": "scholarPreventSlowingOfCharacterSkillProgress",
+};
 
 export function buildItemEngToJpnLookup(itemSourceLists) {
   const lookup = new Map();
