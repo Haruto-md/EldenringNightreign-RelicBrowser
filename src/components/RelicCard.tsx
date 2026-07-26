@@ -74,7 +74,7 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
 
   const tooltipContent = coordinatesByColor ? (
     <Typography component="span" variant="inherit">
-      {t("coordinatesHelpPrefix")}{" "}
+      {t("coordinatesHelpPrefix")}
       <Typography
         color={selectedChipColor}
         fontWeight="bold"
@@ -82,8 +82,8 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
         variant="inherit"
       >
         {t(`colors.${selectedColor}`)}
-      </Typography>{" "}
-      {t("coordinatesHelpMiddle")}{" "}
+      </Typography>
+      {t("coordinatesHelpMiddle")}
       <Typography
         color={itemType === ItemType.DeepRelic ? "#76adde" : "text.primary"}
         fontWeight="bold"
@@ -92,7 +92,7 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
       >
         {itemType === ItemType.DeepRelic ? t("depthsRelicLabel") : t("relicLabel")}
       </Typography>
-      .
+      {t("coordinatesHelpSuffix")}
     </Typography>
   ) : (
     t("coordinatesHelpSimple")

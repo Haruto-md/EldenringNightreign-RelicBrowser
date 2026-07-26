@@ -73,7 +73,7 @@ export const RelicDisplay: React.FC<RelicDisplayProps> = ({
       >
         <Alert severity="info">
           {t("noRelicsFoundTemplate", {
-            color: colorFilter.color !== RelicSlotColor.Any ? `${t(`colors.${colorFilter.color}`)}` : "",
+            color: colorFilter.color !== RelicSlotColor.Any ? `${t(`colors.${colorFilter.color}`)} ` : "",
             type: colorFilter.type === ItemType.DeepRelic ? t("deepRelicsPlural") : t("relicsPlural"),
           })}
         </Alert>
