@@ -398,17 +398,33 @@ git commit -m "Add EffectFilter module: AND-of-OR-groups plus exclude matcher"
 - Create: `src/resources/effectCategories.test.ts`
 
 **Interfaces:**
-- Consumes: `buildJpnToEngLookup`, `extractI18nEnglishEffectStrings`, `matchEffectKeyName` from `./damage-multiplier-matching.mjs` (already exist, used by `scripts/generate-damage-multipliers.mjs`).
+- Consumes: nothing from other scripts. `scripts/damage-multiplier-matching.mjs`
+  and `scripts/generate-damage-multipliers.mjs`, referenced in earlier drafts
+  of this plan as reusable precedent, turned out to be **uncommitted,
+  untracked files that exist only in the working directory of a separate,
+  unrelated in-progress branch (`damage-optimization`)** — they are not part
+  of `main` and must not be depended on. This task instead defines its own
+  small local copies of the three matching primitives it needs
+  (`buildJpnToEngLookup`, `extractI18nEnglishEffectStrings`,
+  `matchEffectKeyName`), inlined directly in `generate-effect-categories.mjs`
+  and unit-tested here. If `damage-optimization` merges these into `main`
+  later, deduplicating is a separate, future cleanup — not this task's
+  concern.
 - Produces (generated file): `effectCategoryOrder: string[]`, `effectCategories: Record<EffectKey, string>`.
-- Produces (script, exported for its own test): `extractEffectKeyNames(effectKeysSourceText: string): string[]`.
+- Produces (script, exported for its own tests): `extractEffectKeyNames(effectKeysSourceText: string): string[]`, `buildJpnToEngLookup(sourceLists: {jpn: string, eng: string}[][]): Map<string, string>`, `extractI18nEnglishEffectStrings(i18nSourceText: string): Map<string, string>`, `matchEffectKeyName(jpnName: string, jpnToEng: Map<string,string>, englishToEffectKeyName: Map<string,string>, overrides: Record<string,string>): string | undefined`.
 
-- [ ] **Step 1: Write the failing test for the script's own parsing helper**
+- [ ] **Step 1: Write the failing tests for the script's helpers**
 
 Create `scripts/generate-effect-categories.test.mjs`:
 
 ```js
 import { describe, it, expect } from "vitest";
-import { extractEffectKeyNames } from "./generate-effect-categories.mjs";
+import {
+  buildJpnToEngLookup,
+  extractEffectKeyNames,
+  extractI18nEnglishEffectStrings,
+  matchEffectKeyName,
+} from "./generate-effect-categories.mjs";
 
 describe("extractEffectKeyNames", () => {
   it("extracts member names in declaration order, excluding LENGTH", () => {
@@ -427,6 +443,74 @@ describe("extractEffectKeyNames", () => {
     ]);
   });
 });
+
+describe("buildJpnToEngLookup", () => {
+  it("maps jpn -> eng, first match wins", () => {
+    const lookup = buildJpnToEngLookup([
+      [{ jpn: "生命力+1", eng: "Vigor +1" }],
+      [{ jpn: "生命力+1", eng: "SHOULD NOT WIN" }],
+    ]);
+    expect(lookup.get("生命力+1")).toBe("Vigor +1");
+    expect(lookup.size).toBe(1);
+  });
+
+  it("skips entries missing jpn or eng", () => {
+    const lookup = buildJpnToEngLookup([
+      [{ jpn: "", eng: "x" }, { jpn: "y", eng: "" }],
+    ]);
+    expect(lookup.size).toBe(0);
+  });
+});
+
+describe("extractI18nEnglishEffectStrings", () => {
+  it("maps English text to EffectKey member name from the en: block", () => {
+    const source = `
+export const resources = {
+  en: {
+    translation: {
+      effects: {
+        [EffectKey.vigorPlus1]: "Vigor +1",
+        [EffectKey.arcanePlus1]: "Arcane +1",
+      },
+    },
+  },
+  ja: {
+    translation: {
+      effects: {
+        [EffectKey.vigorPlus1]: "生命力+1",
+      },
+    },
+  },
+};
+`;
+    const map = extractI18nEnglishEffectStrings(source);
+    expect(map.get("Vigor +1")).toBe("vigorPlus1");
+    expect(map.get("Arcane +1")).toBe("arcanePlus1");
+  });
+});
+
+describe("matchEffectKeyName", () => {
+  const jpnToEng = new Map([["生命力+1", "Vigor +1"]]);
+  const englishToEffectKeyName = new Map([["Vigor +1", "vigorPlus1"]]);
+
+  it("resolves via the jpn -> eng -> EffectKey chain", () => {
+    expect(matchEffectKeyName("生命力+1", jpnToEng, englishToEffectKeyName, {})).toBe(
+      "vigorPlus1"
+    );
+  });
+
+  it("prefers an explicit override", () => {
+    expect(
+      matchEffectKeyName("生命力+1", jpnToEng, englishToEffectKeyName, {
+        "生命力+1": "someOverrideKey",
+      })
+    ).toBe("someOverrideKey");
+  });
+
+  it("returns undefined when the jpn name has no eng mapping", () => {
+    expect(matchEffectKeyName("未知の効果", jpnToEng, englishToEffectKeyName, {})).toBeUndefined();
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -442,11 +526,6 @@ Create `scripts/generate-effect-categories.mjs`:
 import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
-import {
-  buildJpnToEngLookup,
-  extractI18nEnglishEffectStrings,
-  matchEffectKeyName,
-} from "./damage-multiplier-matching.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -454,9 +533,61 @@ const ROOT = resolve(__dirname, "..");
 const OTHER_CATEGORY = "その他";
 
 // Filled in iteratively from this script's console output (wording
-// mismatches between RelicHub's skills.json and src/i18n.ts). Same pattern
-// as MANUAL_EFFECT_KEY_OVERRIDES in generate-damage-multipliers.mjs.
+// mismatches between RelicHub's skills.json and src/i18n.ts).
 const MANUAL_EFFECT_KEY_OVERRIDES = {};
+
+// These three matching primitives are intentionally local to this script
+// rather than imported from a shared module: at the time this was written,
+// the only other place with equivalent logic (`scripts/damage-multiplier-matching.mjs`)
+// existed solely as an uncommitted file on an unrelated, unmerged branch.
+// Do not add a cross-branch import here.
+
+export function buildJpnToEngLookup(sourceLists) {
+  const lookup = new Map();
+  for (const list of sourceLists) {
+    for (const entry of list) {
+      if (entry.jpn && entry.eng && !lookup.has(entry.jpn)) {
+        lookup.set(entry.jpn, entry.eng);
+      }
+    }
+  }
+  return lookup;
+}
+
+export function extractI18nEnglishEffectStrings(i18nSourceText) {
+  const enMarker = "\n  en:";
+  const jaMarker = "\n  ja:";
+  const enStart = i18nSourceText.indexOf(enMarker);
+  if (enStart === -1) {
+    throw new Error("Could not locate 'en:' translation block in i18n source");
+  }
+
+  const jaStart = i18nSourceText.indexOf(jaMarker);
+  const enBlockEnd = jaStart === -1 ? i18nSourceText.lastIndexOf("};") : jaStart;
+
+  const enBlock = i18nSourceText.slice(enStart, enBlockEnd);
+  const map = new Map();
+  const pattern = /\[EffectKey\.(\w+)\]:\s*"([^"]*)"/g;
+  let match;
+  while ((match = pattern.exec(enBlock)) !== null) {
+    const [, effectKeyName, englishText] = match;
+    if (!map.has(englishText)) {
+      map.set(englishText, effectKeyName);
+    }
+  }
+  return map;
+}
+
+export function matchEffectKeyName(jpnName, jpnToEng, englishToEffectKeyName, overrides) {
+  if (overrides[jpnName]) {
+    return overrides[jpnName];
+  }
+  const eng = jpnToEng.get(jpnName);
+  if (!eng) {
+    return undefined;
+  }
+  return englishToEffectKeyName.get(eng);
+}
 
 export function extractEffectKeyNames(effectKeysSourceText) {
   const start = effectKeysSourceText.indexOf("{");
