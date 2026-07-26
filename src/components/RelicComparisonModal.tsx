@@ -7,6 +7,7 @@ import {
   Grid,
 } from "@mui/material";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import type { RelicSlot } from "../types/SaveFile";
 import { RelicSlotColor } from "../utils/RelicColor";
 import { RelicCard } from "./RelicCard";
@@ -26,6 +27,7 @@ export const RelicComparisonModal: React.FC<RelicComparisonModalProps> = ({
   equalOrBetterRelic,
   selectedColor,
 }) => {
+  const { t } = useTranslation();
   const currentRelicClean: RelicSlot = {
     id: currentRelic.id,
     itemId: currentRelic.itemId,
@@ -44,11 +46,11 @@ export const RelicComparisonModal: React.FC<RelicComparisonModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Relic Comparison</DialogTitle>
+      <DialogTitle>{t("relicComparisonTitle")}</DialogTitle>
       <DialogContent dividers>
         {currentRelic.redundant?.outclassed
-          ? "This relic is outclassed by a better relic."
-          : "This relic is a duplicate."}
+          ? t("outclassedText")
+          : t("duplicateText")}
         <Grid container columns={2} spacing={2}>
           <Grid size={{ xs: 2, sm: 1 }}>
             <RelicCard
@@ -71,7 +73,7 @@ export const RelicComparisonModal: React.FC<RelicComparisonModalProps> = ({
 
       <DialogActions>
         <Button onClick={onClose} autoFocus>
-          Close
+          {t("closeButton")}
         </Button>
       </DialogActions>
     </Dialog>

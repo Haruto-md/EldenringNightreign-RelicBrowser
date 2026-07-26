@@ -1,6 +1,7 @@
 import TuneIcon from "@mui/icons-material/Tune";
 import { Box, Chip, Collapse, ToggleButton, ToggleButtonGroup } from "@mui/material";
 import React, { type Dispatch, type SetStateAction, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { type Effect } from "../resources/effects";
 import {
   colorFilterOptions,
@@ -33,6 +34,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   onEffectFilterChange,
 }) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const { t } = useTranslation();
 
   return (
     <Box sx={{ py: 2 }}>
@@ -48,7 +50,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         <EffectsAutocomplete
           onSearchChange={onSearchChange}
           availableEffects={availableEffects}
-          placeholder="Search relics by name or effect..."
+          placeholder={t("searchPlaceholder")}
         />
 
         <ToggleButtonGroup
@@ -77,7 +79,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           selected={filterSell}
           onChange={() => onFilterSellChange((prevSelected) => !prevSelected)}
         >
-          <Chip label="SELL" size="small" />
+          <Chip label={t("sellChipLabel")} size="small" />
         </ToggleButton>
 
         <ToggleButton

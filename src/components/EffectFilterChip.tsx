@@ -38,8 +38,8 @@ export function EffectFilterChip({
         <Tooltip
           title={
             entry.comparison === "atLeast"
-              ? "This level or better (click to switch to 'or below')"
-              : "This level or below (click to switch to 'or better')"
+              ? t("comparisonAtLeastTooltip")
+              : t("comparisonAtMostTooltip")
           }
         >
           <IconButton size="small" onClick={onToggleComparison} sx={{ p: 0.25 }}>

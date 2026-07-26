@@ -1,5 +1,6 @@
 import AddIcon from "@mui/icons-material/Add";
 import { Box, Button, Divider, Stack, Typography } from "@mui/material";
+import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import {
   createEmptyEffectFilterGroup,
@@ -25,6 +26,7 @@ export function AdvancedSearchPanel({
   effectFilter,
   onEffectFilterChange,
 }: AdvancedSearchPanelProps) {
+  const { t } = useTranslation();
   const updateGroup = (groupId: string, updater: (group: EffectFilterGroup) => EffectFilterGroup) => {
     onEffectFilterChange({
       ...effectFilter,
@@ -97,15 +99,17 @@ export function AdvancedSearchPanel({
     <Box sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
         <Typography variant="subtitle2">
-          {activeCount === 0 ? "No advanced filters active" : `${activeCount} filter${activeCount === 1 ? "" : "s"} active`}
+          {activeCount === 0
+            ? t("noAdvancedFiltersActive")
+            : t(activeCount === 1 ? "filtersActiveCountSingular" : "filtersActiveCountPlural", { count: activeCount })}
         </Typography>
         <Button size="small" onClick={clearAll} disabled={activeCount === 0}>
-          Clear all
+          {t("clearAllButton")}
         </Button>
       </Stack>
 
       <Typography variant="caption" color="text.secondary">
-        Required (each row: relic needs at least one)
+        {t("requiredGroupHint")}
       </Typography>
       <Stack spacing={1} sx={{ mt: 0.5, mb: 1 }}>
         {effectFilter.groups.map((group) => (
@@ -120,7 +124,7 @@ export function AdvancedSearchPanel({
             ))}
             <EffectsAutocomplete
               availableEffects={availableEffects}
-              placeholder="Add effect..."
+              placeholder={t("addEffectPlaceholder")}
               onSearchChange={() => {}}
               onChange={(effect) => addEffectToGroup(group.id, effect)}
               clearOnSelect
@@ -129,14 +133,14 @@ export function AdvancedSearchPanel({
           </Stack>
         ))}
         <Button size="small" startIcon={<AddIcon />} onClick={addGroup} sx={{ alignSelf: "flex-start" }}>
-          Add group
+          {t("addGroupButton")}
         </Button>
       </Stack>
 
       <Divider sx={{ my: 1 }} />
 
       <Typography variant="caption" color="text.secondary">
-        Excluded (relic must have none of these)
+        {t("excludedGroupHint")}
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
         {effectFilter.excluded.map((effect) => (
@@ -148,7 +152,7 @@ export function AdvancedSearchPanel({
         ))}
         <EffectsAutocomplete
           availableEffects={availableEffects}
-          placeholder="Add excluded effect..."
+          placeholder={t("addExcludedEffectPlaceholder")}
           onSearchChange={() => {}}
           onChange={addExcluded}
           clearOnSelect

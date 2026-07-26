@@ -74,8 +74,7 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
 
   const tooltipContent = coordinatesByColor ? (
     <Typography component="span" variant="inherit">
-      These coordinates can be used to find the relic ingame when sorted by
-      'Order Found' and filtered by{" "}
+      {t("coordinatesHelpPrefix")}{" "}
       <Typography
         color={selectedChipColor}
         fontWeight="bold"
@@ -84,19 +83,19 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
       >
         {t(`colors.${selectedColor}`)}
       </Typography>{" "}
-      and type{" "}
+      {t("coordinatesHelpMiddle")}{" "}
       <Typography
         color={itemType === ItemType.DeepRelic ? "#76adde" : "text.primary"}
         fontWeight="bold"
         component="span"
         variant="inherit"
       >
-        {itemType === ItemType.DeepRelic ? "Depths Relic" : "Relic"}
+        {itemType === ItemType.DeepRelic ? t("depthsRelicLabel") : t("relicLabel")}
       </Typography>
       .
     </Typography>
   ) : (
-    "These coordinates can be used to find the relic ingame when sorted by 'Order Found'."
+    t("coordinatesHelpSimple")
   );
 
   const [row, column] = coordinatesByColor
@@ -161,7 +160,7 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
           </Typography>
           {relic.redundant && !unsellableItemIds.includes(relic.itemId) && (
             <Chip
-              label="SELL"
+              label={t("sellChipLabel")}
               size="small"
               sx={{
                 overflow: "clip",

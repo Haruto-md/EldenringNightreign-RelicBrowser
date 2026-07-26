@@ -106,12 +106,12 @@ export function RelicsPage({
           slots={saveFileData.slots}
           value={saveFileData.currentSlot}
           onChange={selectSlot}
-          label={t("Character")}
+          label={t("character")}
         />
       )}
       <AppBar position="static" elevation={24}>
         <Tabs value={tab} onChange={(_e, value) => setTab(value)} centered>
-          <Tab value={TabIndex.RelicBrowser} label="Relic Browser" />
+          <Tab value={TabIndex.RelicBrowser} label={t("relicBrowserTab")} />
           <Tab value={TabIndex.DamageOptimizer} label="ダメージ最適化" />
         </Tabs>
       </AppBar>
