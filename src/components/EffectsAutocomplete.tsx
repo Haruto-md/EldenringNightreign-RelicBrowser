@@ -2,7 +2,7 @@ import { Search } from "@mui/icons-material";
 import { InputAdornment, Typography } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
 import TextField from "@mui/material/TextField";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   EffectType,
@@ -10,6 +10,8 @@ import {
   isMaxLevel,
   type Effect,
 } from "../resources/effects";
+import { effectCategories, effectCategoryOrder } from "../resources/effectCategories";
+import type { EffectKey } from "../resources/effectKeys";
 import { getEffectByKey } from "../utils/DataUtils";
 
 interface EffectsAutocompleteProps {
@@ -19,6 +21,7 @@ interface EffectsAutocompleteProps {
   placeholder: string;
   showOrBetterLabels?: boolean;
   clearOnSelect?: boolean;
+  groupByCategory?: boolean;
 }
 
 export function EffectsAutocomplete({
@@ -28,6 +31,7 @@ export function EffectsAutocomplete({
   placeholder,
   showOrBetterLabels = false,
   clearOnSelect = false,
+  groupByCategory = false,
 }: EffectsAutocompleteProps) {
   const { t } = useTranslation();
   const [inputValue, setInputValue] = useState("");
@@ -53,12 +57,29 @@ export function EffectsAutocomplete({
     [showOrBetterLabels, t]
   );
 
+  const categoryOf = useCallback((option: string) => {
+    const effectKey = parseInt(option) as EffectKey;
+    return effectCategories[effectKey] ?? effectCategoryOrder[effectCategoryOrder.length - 1];
+  }, []);
+
+  const options = useMemo(() => {
+    const keys = availableEffects.map((effect) => String(effect.key));
+    if (!groupByCategory) {
+      return keys;
+    }
+    const orderIndex = new Map(effectCategoryOrder.map((category, index) => [category, index]));
+    return [...keys].sort(
+      (a, b) => (orderIndex.get(categoryOf(a)) ?? 0) - (orderIndex.get(categoryOf(b)) ?? 0)
+    );
+  }, [availableEffects, groupByCategory, categoryOf]);
+
   return (
     <Autocomplete
       disablePortal
       autoHighlight
       clearOnEscape
-      options={availableEffects.map((effect) => String(effect.key))}
+      options={options}
+      groupBy={groupByCategory ? categoryOf : undefined}
       freeSolo
       sx={{ width: 350 }}
       value={null}
