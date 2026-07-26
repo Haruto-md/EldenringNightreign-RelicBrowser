@@ -4798,6 +4798,18 @@ export function isSameGroupAndEqualOrBetter(
   );
 }
 
+export function isSameGroupAndEqualOrWorse(
+  effect1: Effect,
+  effect2: Effect
+): boolean {
+  return (
+    isSameGroup(effect1, effect2) &&
+    effect1.level !== undefined &&
+    effect2.level !== undefined &&
+    effect1.level >= effect2.level
+  );
+}
+
 function hasGroupAndLevel(e: unknown): e is EffectWithGroupArrayElement {
   return typeof e === "object" && e !== null && "group" in e && "level" in e;
 }

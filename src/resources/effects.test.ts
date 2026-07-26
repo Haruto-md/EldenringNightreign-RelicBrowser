@@ -1,9 +1,9 @@
 import assert from "assert";
 import { describe, expect, it } from "vitest";
 import i18n from "../i18n";
-import { getEffectByKey, getEffectName } from "../utils/DataUtils";
+import { getEffect, getEffectByKey, getEffectName } from "../utils/DataUtils";
 import { EffectKey } from "./effectKeys";
-import { effectsArray } from "./effects";
+import { effectsArray, isSameGroupAndEqualOrBetter, isSameGroupAndEqualOrWorse } from "./effects";
 
 describe("effects", () => {
   it("should have all effects in effects array", () => {
@@ -54,5 +54,33 @@ describe("effects", () => {
       EffectKey.LENGTH,
       "EffectKey.LENGTH has changed. This is just a reminder to update EFFECT_KEY_SPACE in WASM code"
     ).toBe(850);
+  });
+});
+
+describe("isSameGroupAndEqualOrWorse", () => {
+  const endurancePlus1 = getEffect(7000200);
+  const endurancePlus2 = getEffect(7000201);
+  const endurancePlus3 = getEffect(7000202);
+
+  it("matches a lower-level effect in the same group", () => {
+    expect(isSameGroupAndEqualOrWorse(endurancePlus2, endurancePlus1)).toBe(true);
+  });
+
+  it("matches an equal-level effect in the same group", () => {
+    expect(isSameGroupAndEqualOrWorse(endurancePlus2, endurancePlus2)).toBe(true);
+  });
+
+  it("does not match a higher-level effect in the same group", () => {
+    expect(isSameGroupAndEqualOrWorse(endurancePlus2, endurancePlus3)).toBe(false);
+  });
+
+  it("does not match effects from different groups", () => {
+    const arcanePlus1 = getEffect(7000700);
+    expect(isSameGroupAndEqualOrWorse(endurancePlus2, arcanePlus1)).toBe(false);
+  });
+
+  it("is the mirror image of isSameGroupAndEqualOrBetter", () => {
+    expect(isSameGroupAndEqualOrBetter(endurancePlus2, endurancePlus3)).toBe(true);
+    expect(isSameGroupAndEqualOrWorse(endurancePlus2, endurancePlus3)).toBe(false);
   });
 });
