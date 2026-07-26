@@ -51,26 +51,49 @@ color `ToggleButtonGroup` in `SearchInput.tsx` keep working exactly as today.
 New structured state, held alongside them in `RelicBrowser.tsx`:
 
 ```ts
+type Comparison = "atLeast" | "atMost";
+
+interface EffectFilterEntry {
+  effect: Effect;
+  comparison: Comparison; // only meaningful when effect has group+level; see below
+}
+
 interface EffectFilterGroup {
   id: string; // stable id for React keys / editing
-  effects: Effect[]; // "at least one of" — OR within the group
+  entries: EffectFilterEntry[]; // "at least one of" — OR within the group
 }
 
 interface EffectFilterState {
-  groups: EffectFilterGroup[]; // AND across groups; a 1-effect group == a required effect
+  groups: EffectFilterGroup[]; // AND across groups; a 1-entry group == a required effect
   excluded: Effect[]; // NOT — relic is dropped if it has ANY of these
 }
 ```
 
-A relic matches the structured filter when:
+A relic matches the structured filter when, for every group in `groups`, the
+relic has at least one effect satisfying at least one entry in that group:
 
-1. For every group in `groups`, the relic has at least one effect in
-   `group.effects` (using the existing `isSameGroupAndEqualOrBetter` "or
-   better" comparison already used elsewhere in the app, so selecting
-   "Strength +2" also matches a relic with "Strength +3").
-2. The relic has **none** of the effects in `excluded` (exact match, no "or
-   better" — a demerit is a demerit regardless of level for exclusion
-   purposes).
+- `comparison: "atLeast"` (the default): matched using the existing
+  `isSameGroupAndEqualOrBetter(entry.effect, relicEffect)` — same group,
+  `relicEffect.level >= entry.effect.level`. This is today's "or better"
+  behavior (selecting "Strength +2" also matches "Strength +3").
+- `comparison: "atMost"`: matched using a new mirrored helper,
+  `isSameGroupAndEqualOrWorse(entry.effect, relicEffect)` — same group,
+  `relicEffect.level <= entry.effect.level`. Selecting "Vigor +2 (or below)"
+  matches a relic with "Vigor +1" or "Vigor +2," but not "Vigor +3." This
+  answers the "how do I find weak/outclassed levels of an effect" case
+  without needing to enumerate every higher level in the exclude list.
+- Effects with no `group`/`level` (most non-stat effects) only ever match
+  exactly — the "at least / at most" toggle is meaningless for them and is
+  hidden in the UI (see below); their entry always uses plain equality.
+
+Separately, the relic has **none** of the effects in `excluded` (exact
+match, no "or better"/"or worse" — a demerit is a demerit regardless of
+level for exclusion purposes; `excluded` stays a flat `Effect[]`, not
+`EffectFilterEntry[]`).
+
+`isSameGroupAndEqualOrWorse` is a small addition to `effects.ts`, mirroring
+`isSameGroupAndEqualOrBetter` (`src/resources/effects.ts:4789`) with the
+inequality flipped.
 
 Empty `groups` and empty `excluded` means "no structured filter," identical
 to today's behavior. `RelicBrowser.tsx`'s `matchingRelics` memo gains this as
@@ -143,9 +166,15 @@ persist across reloads.
 
 - **Required groups** — a list of "OR groups," each rendered as a chip-row of
   selected effects plus a "+ add effect" `EffectsAutocomplete` input. A
-  "+ Add group" button appends a new empty group. Groups with zero effects
+  "+ Add group" button appends a new empty group. Groups with zero entries
   are dropped automatically (no explicit remove-group button needed — clear
   the group's last chip and it disappears from the AND list).
+- **At-least/at-most toggle** — each chip for an effect that has a
+  `group`/`level` (i.e. `isMaxLevel`-eligible stat/stacking effects) gets a
+  small clickable icon (↑ "or better" / ↓ "or below") that flips its
+  `comparison`, defaulting to `atLeast`. Chips for effects without a group
+  (most unique/character effects) render with no toggle, since only exact
+  match applies.
 - **Effect picker** — the `EffectsAutocomplete` instances inside the panel
   render their dropdown grouped by `effectCategoryOrder`/`effectCategories`
   (MUI `Autocomplete`'s built-in `groupBy` prop), instead of today's flat
@@ -166,14 +195,19 @@ the structured filter just becomes one more input to that same memo.
 - Unit tests for the new matcher (`doesRelicMatchEffectFilter` or similar in
   `SearchUtils.tsx`/`RelicProcessor.ts`): empty filter matches everything;
   single required group (OR) matches on any member; multiple groups (AND)
-  requires all; "or better" comparison is honored for required groups only,
-  not for exclusion; excluded effect drops an otherwise-matching relic;
-  combination with existing free-text/color filters.
+  requires all; `atLeast` comparison matches equal-or-higher level;
+  `atMost` comparison matches equal-or-lower level and correctly excludes
+  higher levels (the "Vigor +2 or below" case); ungrouped effects ignore
+  `comparison` and match exactly; excluded effect drops an otherwise-matching
+  relic; combination with existing free-text/color filters.
+- Unit test for `isSameGroupAndEqualOrWorse` in `effects.test.ts`, mirroring
+  existing `isSameGroupAndEqualOrBetter` coverage.
 - Unit test for the generator's category assignment: every `EffectKey` in
   `effectKeys.ts` appears in the generated `effectCategories` map; effects
   absent from `skills.json` land in "その他"; `MANUAL_EFFECT_KEY_OVERRIDES`
   entries resolve correctly.
 - Component test for the Advanced Search panel: adding effects across two
-  groups filters relics with AND-of-OR semantics; adding an excluded effect
-  removes matching relics; clearing a group's last chip removes the group;
-  "Clear all" resets to unfiltered.
+  groups filters relics with AND-of-OR semantics; toggling a chip's
+  at-least/at-most icon changes which relics match; adding an excluded
+  effect removes matching relics; clearing a group's last chip removes the
+  group; "Clear all" resets to unfiltered.
