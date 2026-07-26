@@ -93,6 +93,8 @@ pub struct SearchInput {
     pub enabled_vessels: Vec<[u8;6]>,
     pub recommended_effects: Vec<Effect>,
     pub selected_effect_ranges: Option<Vec<SelectedEffectRange>>, // new optional
+    pub damage_multipliers: Option<Vec<f32>>,   // len == EFFECT_KEY_SPACE; 1.0 = irrelevant
+    pub excluded_demerit_keys: Option<Vec<u32>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -113,6 +115,31 @@ fn is_recommended_effect(effect: &Effect, recommended_bitmap: &[bool; EFFECT_KEY
     let k = effect.key as usize;
     if k >= EFFECT_KEY_SPACE { return false; } // Prevent OOB -> unreachable trap
     unsafe { *recommended_bitmap.get_unchecked(k) }
+}
+
+/// In damage mode, a relic is a search candidate if it carries an effect with a
+/// damage multiplier > 1.0, OR an effect named by a must-have range
+/// (`min_stacks > 0`) — otherwise a quantity-only must-have (no damage
+/// multiplier of its own) could never enter the candidate set, silently
+/// making its range constraint unsatisfiable.
+#[inline(always)]
+fn is_damage_mode_candidate(
+    effects: &[Effect],
+    nightfarer: u8,
+    damage_mults: &[f32],
+    range_min_keys: &[bool; EFFECT_KEY_SPACE],
+) -> bool {
+    for e in effects {
+        let k = e.key as usize;
+        if k >= EFFECT_KEY_SPACE { continue; }
+        if let Some(nf) = e.nightfarer { if nf != nightfarer { continue; } }
+        if damage_mults.get(k).copied().unwrap_or(1.0) > 1.0
+            || unsafe { *range_min_keys.get_unchecked(k) }
+        {
+            return true;
+        }
+    }
+    false
 }
 
 #[inline(always)]
@@ -151,6 +178,9 @@ fn add_combination_if_unique6(
     ranges: &[(u32,u8,u8)],
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    damage_mode: bool,
+    damage_mults: &[f32],
+    excluded_demerits: &[u32],
 ) {
     // Skip combos where all 6 slots are empty
     if relic_indices6.iter().all(|x| x.is_none()) { return; }
@@ -161,7 +191,13 @@ fn add_combination_if_unique6(
     // Drop if out of requested stack ranges
     if !combination_satisfies_ranges(&relic_indices6, relics_normal, relics_deep, nightfarer, ranges, selected_groups_by_key, selected_levels_by_key) { return; }
 
-    let points = calc_points(nightfarer, relic_indices6, relics_normal, relics_deep, selected_keys, recommended_bitmap, score_ctx);
+    if damage_mode && combination_has_excluded_demerit(&relic_indices6, relics_deep, excluded_demerits) { return; }
+
+    let points = if damage_mode {
+        calc_damage(nightfarer, relic_indices6, relics_normal, relics_deep, damage_mults, score_ctx)
+    } else {
+        calc_points(nightfarer, relic_indices6, relics_normal, relics_deep, selected_keys, recommended_bitmap, score_ctx)
+    };
 
     if results.len() < TOP_RESULTS {
         results.push(VesselCombinationResultEntry { vessel_index, relic_indices: relic_indices6, points });
@@ -253,6 +289,66 @@ fn calc_points(
     points
 }
 
+/// `calc_damage` indexes `multipliers` with `get_unchecked(k)` for k up to
+/// EFFECT_KEY_SPACE-1, which is only sound if `multipliers.len() >= EFFECT_KEY_SPACE`.
+/// Callers must check this before invoking `calc_damage`.
+#[inline(always)]
+fn damage_multipliers_valid(mults: &[f32]) -> bool {
+    mults.len() >= EFFECT_KEY_SPACE
+}
+
+#[inline(always)]
+fn calc_damage(
+    nightfarer: u8,
+    relic_indices6: [Option<usize>; 6],
+    relics_normal: &[RelicSlot],
+    relics_deep: &[RelicSlot],
+    multipliers: &[f32],
+    ctx: &mut ScoreContext,
+) -> f32 {
+    ctx.next_generation();
+    let mut product: f32 = 1.0;
+    for (slot_i, opt_idx) in relic_indices6.iter().enumerate() {
+        if let Some(idx) = opt_idx {
+            let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } }
+                        else { unsafe { relics_deep.get_unchecked(*idx) } };
+            for effect in &relic.effects {
+                if let Some(nf) = effect.nightfarer { if nf != nightfarer { continue; } }
+                let k = effect.key as usize;
+                if k >= EFFECT_KEY_SPACE { continue; }
+                let m = unsafe { *multipliers.get_unchecked(k) };
+                if m <= 1.0 { continue; }
+                let stacks = effect.stacks.unwrap_or(true);
+                if !stacks {
+                    if ctx.is_key(k) { continue; }
+                    ctx.set_key(k);
+                }
+                product *= m;
+            }
+        }
+    }
+    product
+}
+
+#[inline(always)]
+fn combination_has_excluded_demerit(
+    relic_indices6: &[Option<usize>;6],
+    relics_deep: &[RelicSlot],
+    excluded: &[u32],
+) -> bool {
+    if excluded.is_empty() { return false; }
+    // Demerits live on deep relics (slots 3..5).
+    for slot_i in 3..6 {
+        if let Some(idx) = relic_indices6[slot_i] {
+            let relic = unsafe { relics_deep.get_unchecked(idx) };
+            for effect in &relic.effects {
+                if excluded.iter().any(|&e| e == effect.key) { return true; }
+            }
+        }
+    }
+    false
+}
+
 #[inline(always)]
 fn combination_satisfies_ranges(
     relic_indices6: &[Option<usize>;6],
@@ -313,6 +409,40 @@ fn combination_satisfies_ranges(
     true
 }
 
+// True if any slotted relic in this partial 6-combo carries an effect that is a
+// must-have (a range with min_stacks > 0), respecting the nightfarer gate the
+// same way combination_satisfies_ranges does.
+#[inline(always)]
+fn triple_carries_musthave(
+    indices6: &[Option<usize>; 6],
+    relics_normal: &[RelicSlot],
+    relics_deep: &[RelicSlot],
+    nightfarer: u8,
+    range_min_keys: &[bool; EFFECT_KEY_SPACE],
+) -> bool {
+    for (slot_i, opt_idx) in indices6.iter().enumerate() {
+        if let Some(idx) = opt_idx {
+            let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } } else { unsafe { relics_deep.get_unchecked(*idx) } };
+            for effect in &relic.effects {
+                if let Some(nf) = effect.nightfarer { if nf != nightfarer { continue; } }
+                let k = effect.key as usize;
+                if k < EFFECT_KEY_SPACE && unsafe { *range_min_keys.get_unchecked(k) } { return true; }
+            }
+        }
+    }
+    false
+}
+
+// Retention priority key for a group triple: must-have-carrying triples always
+// outrank non-carrying ones, and ties break by damage points. Used so top-K
+// group pruning never discards a triple needed to satisfy a must-have range in
+// favor of a higher-damage triple that ignores it. When no must-haves exist,
+// every triple's flag is false and this degrades to ordering by points alone.
+#[inline(always)]
+fn triple_key_less(a: (bool, f32), b: (bool, f32)) -> bool {
+    (!a.0 && b.0) || (a.0 == b.0 && a.1 < b.1)
+}
+
 fn search_group_triples(
     group_slots: [u8;3],
     by_color_all: &Vec<Vec<usize>>,
@@ -323,10 +453,14 @@ fn search_group_triples(
     nightfarer: u8,
     selected_bitmap: &[bool; EFFECT_KEY_SPACE],
     recommended_bitmap: &[bool; EFFECT_KEY_SPACE],
-) -> (Vec<([Option<usize>;3], f32)>, u32) {
-    let mut local_results: Vec<([Option<usize>;3], f32)> = Vec::with_capacity(TOP_GROUP_RESULTS);
+    damage_mode: bool,
+    damage_mults: &[f32],
+    excluded_demerits: &[u32],
+    range_min_keys: &[bool; EFFECT_KEY_SPACE],
+) -> (Vec<([Option<usize>;3], f32, bool)>, u32) {
+    let mut local_results: Vec<([Option<usize>;3], f32, bool)> = Vec::with_capacity(TOP_GROUP_RESULTS);
     let mut local_seen: HashSet<u32> = HashSet::new();
-    let mut min_tracker: (usize, f32) = (0, f32::INFINITY);
+    let mut min_tracker: (usize, (bool, f32)) = (0, (true, f32::INFINITY));
     let mut score_ctx = ScoreContext::new();
     let mut checked_local: u32 = 0;
 
@@ -367,33 +501,59 @@ fn search_group_triples(
                 if is_deep_group { full_indices6[3] = group_indices[0]; full_indices6[4] = group_indices[1]; full_indices6[5] = group_indices[2]; }
                 else { full_indices6[0] = group_indices[0]; full_indices6[1] = group_indices[1]; full_indices6[2] = group_indices[2]; }
 
-                let points = calc_points(
-                    nightfarer,
-                    full_indices6,
-                    relics_normal,
-                    relics_deep,
-                    selected_bitmap,
-                    recommended_bitmap,
-                    &mut score_ctx,
+                if damage_mode && is_deep_group && combination_has_excluded_demerit(&full_indices6, relics_deep, excluded_demerits) { return; }
+
+                let points = if damage_mode {
+                    calc_damage(
+                        nightfarer,
+                        full_indices6,
+                        relics_normal,
+                        relics_deep,
+                        damage_mults,
+                        &mut score_ctx,
+                    )
+                } else {
+                    calc_points(
+                        nightfarer,
+                        full_indices6,
+                        relics_normal,
+                        relics_deep,
+                        selected_bitmap,
+                        recommended_bitmap,
+                        &mut score_ctx,
+                    )
+                };
+
+                // A must-have effect may carry no damage multiplier at all, so its
+                // triples would otherwise lose every points-only pruning contest and
+                // never survive to the final 6-slot merge. Rank must-have-carrying
+                // triples above all others so top-K pruning can never discard the
+                // only triples capable of satisfying a must-have range.
+                let carries_mh = damage_mode && triple_carries_musthave(
+                    &full_indices6, relics_normal, relics_deep, nightfarer, range_min_keys
                 );
+                let this_priority = (carries_mh, points);
 
                 let unique_key = pack_triple_key(group_indices);
                 if !local_seen.insert(unique_key) { return; }
 
                 if local_results.len() < TOP_GROUP_RESULTS {
-                    local_results.push((group_indices, points));
-                    if points < min_tracker.1 { min_tracker = (local_results.len() - 1, points); }
+                    local_results.push((group_indices, points, carries_mh));
+                    if triple_key_less(this_priority, min_tracker.1) {
+                        min_tracker = (local_results.len() - 1, this_priority);
+                    }
                     return;
                 }
-                if points <= min_tracker.1 { return; }
+                if !triple_key_less(min_tracker.1, this_priority) { return; }
                 // Replace min
                 let min_i = min_tracker.0;
-                local_results[min_i] = (group_indices, points);
+                local_results[min_i] = (group_indices, points, carries_mh);
                 // Recompute min
                 let mut new_min_i = 0usize;
-                let mut new_min_p = local_results[0].1;
+                let mut new_min_p = (local_results[0].2, local_results[0].1);
                 for (i, r) in local_results.iter().enumerate().skip(1) {
-                    if r.1 < new_min_p { new_min_p = r.1; new_min_i = i; }
+                    let p = (r.2, r.1);
+                    if triple_key_less(p, new_min_p) { new_min_p = p; new_min_i = i; }
                 }
                 min_tracker = (new_min_i, new_min_p);
             };
@@ -407,7 +567,7 @@ fn search_group_triples(
     }
 
     // Ensure at least an empty triple so merging can still happen when this group has no relics
-    if local_results.is_empty() { local_results.push(([None, None, None], 0.0)); }
+    if local_results.is_empty() { local_results.push(([None, None, None], 0.0, false)); }
 
     (local_results, checked_local)
 }
@@ -420,6 +580,17 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     };
     // Soft validation (avoid panics which produce unreachable)
     if input.selected_effects.len() > SELECTED_EFFECTS_SPACE || input.recommended_effects.len() > RECOMMENDED_EFFECTS_SPACE { return serde_wasm_bindgen::to_value(&SearchOutput { combinations: vec![], total_combinations_checked: 0 }).unwrap(); }
+
+    let damage_mode = input.damage_multipliers.is_some();
+    let damage_mults: Vec<f32> = input.damage_multipliers.clone().unwrap_or_default();
+    // Soft validation: `calc_damage` indexes `damage_mults` with `get_unchecked(k)` for
+    // k up to EFFECT_KEY_SPACE-1, relying on the Vec actually having that many elements.
+    // A shorter Vec supplied by the JS caller would be an out-of-bounds read (UB), not a
+    // panic, so reject it here before any scoring happens.
+    if damage_mode && !damage_multipliers_valid(&damage_mults) {
+        return serde_wasm_bindgen::to_value(&SearchOutput { combinations: vec![], total_combinations_checked: 0 }).unwrap();
+    }
+    let excluded_demerits: Vec<u32> = input.excluded_demerit_keys.clone().unwrap_or_default();
 
     let mut selected_bitmap = [false; EFFECT_KEY_SPACE];
     for e in &input.selected_effects { let k = e.key as usize; if k < EFFECT_KEY_SPACE { unsafe { *selected_bitmap.get_unchecked_mut(k) = true; } } }
@@ -441,13 +612,29 @@ pub fn search_combinations(input: JsValue) -> JsValue {
         None => Vec::new(),
     };
 
+    // Keys named by a must-have range (min_stacks > 0). In damage mode these
+    // must also qualify a relic as a candidate — see is_damage_mode_candidate.
+    let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+    for (k, min, _max) in &ranges_vec {
+        if *min > 0 {
+            let ku = *k as usize;
+            if ku < EFFECT_KEY_SPACE { range_min_keys[ku] = true; }
+        }
+    }
+
     // Build candidate bitmaps for normal and deep relics
     let mut effect_candidates_norm: Vec<usize> = Vec::new();
     effect_candidates_norm.reserve(input.relics.len());
     let mut is_candidate_norm: Vec<bool> = vec![false; input.relics.len()];
     for (idx, relic) in input.relics.iter().enumerate() {
-        let mut any_selected = false;
-        for e in &relic.effects { let k = e.key as usize; if k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; } }
+        let any_selected = if damage_mode {
+            is_damage_mode_candidate(&relic.effects, input.nightfarer, &damage_mults, &range_min_keys)
+        } else {
+            relic.effects.iter().any(|e| {
+                let k = e.key as usize;
+                k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) }
+            })
+        };
         if any_selected { effect_candidates_norm.push(idx); unsafe { *is_candidate_norm.get_unchecked_mut(idx) = true; } }
     }
 
@@ -455,8 +642,14 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     effect_candidates_deep.reserve(input.deep_relics.len());
     let mut is_candidate_deep: Vec<bool> = vec![false; input.deep_relics.len()];
     for (idx, relic) in input.deep_relics.iter().enumerate() {
-        let mut any_selected = false;
-        for e in &relic.effects { let k = e.key as usize; if k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) } { any_selected = true; break; } }
+        let any_selected = if damage_mode {
+            is_damage_mode_candidate(&relic.effects, input.nightfarer, &damage_mults, &range_min_keys)
+        } else {
+            relic.effects.iter().any(|e| {
+                let k = e.key as usize;
+                k < EFFECT_KEY_SPACE && unsafe { *selected_bitmap.get_unchecked(k) }
+            })
+        };
         if any_selected { effect_candidates_deep.push(idx); unsafe { *is_candidate_deep.get_unchecked_mut(idx) = true; } }
     }
 
@@ -512,6 +705,10 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             nightfarer,
             &selected_bitmap,
             &recommended_bitmap,
+            damage_mode,
+            &damage_mults,
+            &excluded_demerits,
+            &range_min_keys,
         );
         checked_local += checked_norm;
 
@@ -525,13 +722,17 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             nightfarer,
             &selected_bitmap,
             &recommended_bitmap,
+            damage_mode,
+            &damage_mults,
+            &excluded_demerits,
+            &range_min_keys,
         );
         checked_local += checked_deep;
 
         // Merge the two groups and score full 6-slot combinations
         let mut score_ctx = ScoreContext::new();
-        for (norm_idxs, _) in norm_triples.iter() {
-            for (deep_idxs, _) in deep_triples.iter() {
+        for (norm_idxs, _, _) in norm_triples.iter() {
+            for (deep_idxs, _, _) in deep_triples.iter() {
                 let relic_indices6: [Option<usize>;6] = [
                     norm_idxs[0], norm_idxs[1], norm_idxs[2],
                     deep_idxs[0], deep_idxs[1], deep_idxs[2],
@@ -552,6 +753,9 @@ pub fn search_combinations(input: JsValue) -> JsValue {
                     &ranges_vec,
                     &selected_groups_by_key,
                     &selected_levels_by_key,
+                    damage_mode,
+                    &damage_mults,
+                    &excluded_demerits,
                 );
             }
         }
@@ -585,3 +789,153 @@ pub fn search_combinations(input: JsValue) -> JsValue {
 
 // Fallback empty vec for invalid colors in parallel loops
 static EMPTY_VEC: Vec<usize> = Vec::new();
+
+#[cfg(test)]
+mod damage_tests {
+    use super::*;
+    fn relic(effects: Vec<(u32, Option<bool>, Option<u8>)>) -> RelicSlot {
+        RelicSlot { color: Some(1), effects: effects.into_iter().map(|(key, stacks, nf)| Effect {
+            key, nightfarer: nf, stacks, group: None, level: None, startingBonus: None, r#type: None,
+        }).collect() }
+    }
+    fn mults(pairs: &[(usize, f32)]) -> Vec<f32> {
+        let mut m = vec![1.0f32; EFFECT_KEY_SPACE];
+        for &(k, v) in pairs { m[k] = v; }
+        m
+    }
+
+    #[test]
+    fn stacks_true_multiplies_each_occurrence() {
+        let normal = vec![relic(vec![(10, Some(true), None)]), relic(vec![(10, Some(true), None)])];
+        let deep: Vec<RelicSlot> = vec![];
+        let m = mults(&[(10, 1.1)]);
+        let idx: [Option<usize>;6] = [Some(0), Some(1), None, None, None, None];
+        let mut ctx = ScoreContext::new();
+        let p = calc_damage(0, idx, &normal, &deep, &m, &mut ctx);
+        assert!((p - 1.1f32 * 1.1f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn stacks_false_multiplies_once() {
+        let normal = vec![relic(vec![(10, Some(false), None)]), relic(vec![(10, Some(false), None)])];
+        let deep: Vec<RelicSlot> = vec![];
+        let m = mults(&[(10, 1.15)]);
+        let idx: [Option<usize>;6] = [Some(0), Some(1), None, None, None, None];
+        let mut ctx = ScoreContext::new();
+        let p = calc_damage(0, idx, &normal, &deep, &m, &mut ctx);
+        assert!((p - 1.15f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn nightfarer_mismatch_ignored_and_irrelevant_ignored() {
+        let normal = vec![relic(vec![(10, Some(true), Some(3)), (20, Some(true), None)])];
+        let deep: Vec<RelicSlot> = vec![];
+        let m = mults(&[(10, 1.5) /* nf-exclusive, wrong nf */]); // key 20 stays 1.0
+        let idx: [Option<usize>;6] = [Some(0), None, None, None, None, None];
+        let mut ctx = ScoreContext::new();
+        let p = calc_damage(0 /* nightfarer 0 != 3 */, idx, &normal, &deep, &m, &mut ctx);
+        assert!((p - 1.0f32).abs() < 1e-5);
+    }
+
+    #[test]
+    fn quantity_only_musthave_relic_is_a_candidate() {
+        // Effect key 30 has NO damage multiplier (stays 1.0) but is named by a
+        // must-have range (min_stacks > 0). It must still be treated as a
+        // damage-mode search candidate so the range constraint is satisfiable.
+        let effects = vec![Effect {
+            key: 30, nightfarer: None, stacks: Some(true), group: None, level: None,
+            startingBonus: None, r#type: None,
+        }];
+        let damage_mults = mults(&[(10, 1.1)]); // key 30 stays 1.0
+        let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+        range_min_keys[30] = true;
+        assert!(is_damage_mode_candidate(&effects, 0, &damage_mults, &range_min_keys));
+
+        // Sanity: without the range-min flag, a non-damage effect is NOT a candidate.
+        let range_min_keys_empty = [false; EFFECT_KEY_SPACE];
+        assert!(!is_damage_mode_candidate(&effects, 0, &damage_mults, &range_min_keys_empty));
+    }
+
+    #[test]
+    fn damage_multipliers_valid_rejects_short_vec_and_accepts_full_vec() {
+        // A Vec shorter than EFFECT_KEY_SPACE must be rejected: calc_damage's
+        // get_unchecked(k) reads up to index EFFECT_KEY_SPACE-1, so anything shorter
+        // would be an out-of-bounds read (UB) rather than a panic.
+        let short = vec![1.0f32; EFFECT_KEY_SPACE - 1];
+        assert!(!damage_multipliers_valid(&short));
+
+        let empty: Vec<f32> = vec![];
+        assert!(!damage_multipliers_valid(&empty));
+
+        let full = vec![1.0f32; EFFECT_KEY_SPACE];
+        assert!(damage_multipliers_valid(&full));
+
+        let longer = vec![1.0f32; EFFECT_KEY_SPACE + 5];
+        assert!(damage_multipliers_valid(&longer));
+    }
+
+    #[test]
+    fn musthave_triple_survives_top_k_pruning_against_many_higher_damage_triples() {
+        // Regression test for a real bug: search_group_triples pruned its
+        // per-group top-TOP_GROUP_RESULTS(200) list purely by damage points. A
+        // must-have effect with no damage multiplier (points stays 1.0) always
+        // lost that contest against filler relics that carry a real damage
+        // multiplier, so with >= TOP_GROUP_RESULTS higher-scoring fillers of the
+        // same color, the only relic satisfying the must-have was evicted before
+        // ever reaching the merge/range-check step, producing zero search
+        // results even though a valid combination existed.
+        const FILLER_COUNT: usize = TOP_GROUP_RESULTS + 50;
+
+        // key 10 carries a real damage multiplier; every filler relic has it.
+        // key 30 is the must-have: no damage multiplier (stays 1.0 in `mults`).
+        let mut normal: Vec<RelicSlot> = (0..FILLER_COUNT)
+            .map(|_| relic(vec![(10, Some(true), None)]))
+            .collect();
+        let musthave_relic_idx = normal.len();
+        normal.push(relic(vec![(30, Some(true), None)]));
+
+        let by_color_all_norm: Vec<Vec<usize>> =
+            vec![(0..normal.len()).collect::<Vec<usize>>(); COLOR_SPACE];
+        // by_color_cand is a dead parameter for anchoring (search_group_triples
+        // always anchors from by_color_all — see the "always use all relics"
+        // comment at its call site); pass a same-shaped placeholder.
+        let by_color_cand_norm = by_color_all_norm.clone();
+
+        let damage_mults = mults(&[(10, 1.5)]); // key 30 stays 1.0 (no damage contribution)
+        let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+        range_min_keys[30] = true;
+
+        let selected_bitmap = [false; EFFECT_KEY_SPACE];
+        let recommended_bitmap = [false; EFFECT_KEY_SPACE];
+        let deep: Vec<RelicSlot> = vec![];
+        let excluded_demerits: Vec<u32> = vec![];
+        let norm_slots: [u8; 3] = [1, 1, 1]; // all Red, matches relic() color
+
+        let (triples, _checked) = search_group_triples(
+            norm_slots,
+            &by_color_all_norm,
+            &by_color_cand_norm,
+            &normal,
+            &deep,
+            false, // is_deep_group
+            0,     // nightfarer
+            &selected_bitmap,
+            &recommended_bitmap,
+            true, // damage_mode
+            &damage_mults,
+            &excluded_demerits,
+            &range_min_keys,
+        );
+
+        assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
+        let has_musthave_triple = triples.iter().any(|(indices, _points, carries_mh)| {
+            *carries_mh && indices.iter().any(|i| *i == Some(musthave_relic_idx))
+        });
+        assert!(
+            has_musthave_triple,
+            "the only relic carrying the must-have effect was pruned away by \
+             {FILLER_COUNT} higher-damage fillers despite TOP_GROUP_RESULTS pruning \
+             being must-have-aware"
+        );
+    }
+}

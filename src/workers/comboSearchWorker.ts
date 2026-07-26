@@ -22,6 +22,8 @@ export interface ComboSearchWorkerInput {
   deepRelics: RelicSlot[];
   enabledVessels: Vessel[];
   selectedEffectRanges: SelectedEffectEntry[];
+  damageMultipliers?: number[];
+  excludedDemeritKeys?: number[];
 }
 
 export interface ComboSearchWorkerProgress {
@@ -114,6 +116,8 @@ export function buildWasmInput({
   deepRelics,
   enabledVessels,
   selectedEffectRanges,
+  damageMultipliers,
+  excludedDemeritKeys,
 }: ComboSearchWorkerInput) {
   return {
     nightfarer,
@@ -135,6 +139,8 @@ export function buildWasmInput({
       min_stacks: e.minStacks,
       max_stacks: e.maxStacks,
     })),
+    damage_multipliers: damageMultipliers ?? undefined,
+    excluded_demerit_keys: excludedDemeritKeys ?? undefined,
   };
 }
 
