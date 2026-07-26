@@ -25,7 +25,7 @@ export const RelicDisplay: React.FC<RelicDisplayProps> = ({
   colorFilter,
   onMatchCountChange,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
 
   const bigScreen = useMediaQuery((theme) => theme.breakpoints.up("md"));
@@ -73,7 +73,10 @@ export const RelicDisplay: React.FC<RelicDisplayProps> = ({
       >
         <Alert severity="info">
           {t("noRelicsFoundTemplate", {
-            color: colorFilter.color !== RelicSlotColor.Any ? `${t(`colors.${colorFilter.color}`)} ` : "",
+            color:
+              colorFilter.color !== RelicSlotColor.Any
+                ? `${t(`colors.${colorFilter.color}`)}${i18n.language.startsWith("en") ? " " : ""}`
+                : "",
             type: colorFilter.type === ItemType.DeepRelic ? t("deepRelicsPlural") : t("relicsPlural"),
           })}
         </Alert>
