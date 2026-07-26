@@ -65,10 +65,6 @@ export function RelicBrowser({
         return false;
       }
 
-      if (!doesRelicMatchEffectFilter(relic, effectFilter)) {
-        return false;
-      }
-
       const item = items.get(itemId);
 
       if (colorFilter.type !== undefined && item !== undefined) {
@@ -86,17 +82,22 @@ export function RelicBrowser({
         }
       }
 
+      const itemColor = getRelicColor(itemId);
+
+      if (!doesRelicColorMatch(itemColor, colorFilter.color)) {
+        return false;
+      }
+
+      if (hasEffectFilter && !doesRelicMatchEffectFilter(relic, effectFilter)) {
+        return false;
+      }
+
       const itemName = getItemName(itemId);
       const effectNames = effects.flatMap(([effect, debuff]) =>
         debuff !== undefined
           ? [getEffectName(effect), getEffectName(debuff)]
           : [getEffectName(effect)]
       );
-      const itemColor = getRelicColor(itemId);
-
-      if (!doesRelicColorMatch(itemColor, colorFilter.color)) {
-        return false;
-      }
 
       return doesRelicMatch(itemName, effectNames, searchTerm);
     });
