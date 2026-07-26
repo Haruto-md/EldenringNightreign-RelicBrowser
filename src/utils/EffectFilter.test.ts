@@ -65,7 +65,7 @@ describe("doesRelicMatchEffectFilter", () => {
   it("atLeast matches an equal-or-higher level", () => {
     const relic = makeRelic([7000202]); // endurance +3
     const filter: EffectFilterState = {
-      groups: [{ id: "g1", entries: [{ effect: endurancePlus2, comparison: "atLeast" }] }],
+      groups: [{ id: "g1", entries: [{ effect: endurancePlus3, comparison: "atLeast" }] }],
       excluded: [],
     };
     expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
@@ -73,13 +73,15 @@ describe("doesRelicMatchEffectFilter", () => {
 
   it("atMost matches an equal-or-lower level and rejects higher", () => {
     const lowRelic = makeRelic([7000201]); // endurance +2
-    const highRelic = makeRelic([7000202]); // endurance +3
+    const highRelic = makeRelic([7000202]); // endurance +3 (same as endurancePlus3)
     const filter: EffectFilterState = {
       groups: [{ id: "g1", entries: [{ effect: endurancePlus2, comparison: "atMost" }] }],
       excluded: [],
     };
     expect(doesRelicMatchEffectFilter(lowRelic, filter)).toBe(true);
     expect(doesRelicMatchEffectFilter(highRelic, filter)).toBe(false);
+    // Verify that a +3 relic matches a +3 filter with atMost
+    expect(doesRelicMatchEffectFilter(highRelic, { groups: [{ id: "g1", entries: [{ effect: endurancePlus3, comparison: "atMost" }] }], excluded: [] })).toBe(true);
   });
 
   it("ungrouped effects ignore comparison and match exactly", () => {
