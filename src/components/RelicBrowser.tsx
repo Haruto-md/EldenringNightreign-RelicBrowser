@@ -10,6 +10,11 @@ import {
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
 import { RelicSlotColor } from "../utils/RelicColor";
 import { doesRelicColorMatch, doesRelicMatch } from "../utils/SearchUtils";
+import {
+  createEmptyEffectFilterState,
+  doesRelicMatchEffectFilter,
+  type EffectFilterState,
+} from "../utils/EffectFilter";
 import { RelicDisplay } from "./RelicDisplay";
 import { SearchInput } from "./SearchInput";
 
@@ -32,12 +37,20 @@ export function RelicBrowser({
   const [colorFilter, setColorFilter] = useState<ColorFilterOption>(
     colorFilterOptions[0]
   );
+  const [effectFilter, setEffectFilter] = useState<EffectFilterState>(
+    createEmptyEffectFilterState()
+  );
+
+  const hasEffectFilter =
+    effectFilter.groups.some((group) => group.entries.length > 0) ||
+    effectFilter.excluded.length > 0;
 
   const matchingRelics = useMemo(() => {
     if (
       !searchTerm.trim() &&
       colorFilter.color === RelicSlotColor.Any &&
-      !filterSell
+      !filterSell &&
+      !hasEffectFilter
     ) {
       return currentSlot.relics;
     }
@@ -49,6 +62,10 @@ export function RelicBrowser({
         filterSell &&
         (redundant === undefined || unsellableItemIds.includes(itemId))
       ) {
+        return false;
+      }
+
+      if (!doesRelicMatchEffectFilter(relic, effectFilter)) {
         return false;
       }
 
@@ -89,6 +106,8 @@ export function RelicBrowser({
     colorFilter.type,
     filterSell,
     currentSlot.relics,
+    effectFilter,
+    hasEffectFilter,
   ]);
 
   const normalRelicsCount = useMemo(() => {
@@ -121,6 +140,8 @@ export function RelicBrowser({
         availableEffects={availableEffects}
         filterSell={filterSell}
         onFilterSellChange={setFilterSell}
+        effectFilter={effectFilter}
+        onEffectFilterChange={setEffectFilter}
       />
 
       <Typography variant="subtitle2" textAlign="center" gutterBottom>

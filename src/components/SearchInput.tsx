@@ -1,10 +1,13 @@
-import { Box, Chip, ToggleButton, ToggleButtonGroup } from "@mui/material";
-import React, { type Dispatch, type SetStateAction } from "react";
+import TuneIcon from "@mui/icons-material/Tune";
+import { Box, Chip, Collapse, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import React, { type Dispatch, type SetStateAction, useState } from "react";
 import { type Effect } from "../resources/effects";
 import {
   colorFilterOptions,
   type ColorFilterOption,
 } from "../utils/ColorFilterOptions";
+import type { EffectFilterState } from "../utils/EffectFilter";
+import { AdvancedSearchPanel } from "./AdvancedSearchPanel";
 import { EffectsAutocomplete } from "./EffectsAutocomplete";
 import { RelicColorChip } from "./RelicColorChip";
 
@@ -15,6 +18,8 @@ interface SearchInputProps {
   availableEffects: Effect[];
   filterSell: boolean;
   onFilterSellChange: Dispatch<SetStateAction<boolean>>;
+  effectFilter: EffectFilterState;
+  onEffectFilterChange: (filter: EffectFilterState) => void;
 }
 
 export const SearchInput: React.FC<SearchInputProps> = ({
@@ -24,52 +29,76 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   availableEffects,
   filterSell,
   onFilterSellChange,
+  effectFilter,
+  onEffectFilterChange,
 }) => {
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "center",
-        flexWrap: "wrap",
-        gap: 2,
-        py: 2,
-      }}
-    >
-      <EffectsAutocomplete
-        onSearchChange={onSearchChange}
-        availableEffects={availableEffects}
-        placeholder="Search relics by name or effect..."
-      />
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
-      <ToggleButtonGroup
-        exclusive
-        aria-label="Relic Color Filter"
-        value={selectedColor}
-        onChange={(_, newColor) => {
-          if (newColor !== null) {
-            onColorChange(newColor);
-          }
+  return (
+    <Box sx={{ py: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "center",
+          flexWrap: "wrap",
+          gap: 2,
         }}
       >
-        {colorFilterOptions.map((option) => (
-          <ToggleButton
-            key={option.color}
-            value={option}
-            sx={{ textTransform: "none" }}
-          >
-            <RelicColorChip color={option.color} type={option.type} />
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
+        <EffectsAutocomplete
+          onSearchChange={onSearchChange}
+          availableEffects={availableEffects}
+          placeholder="Search relics by name or effect..."
+        />
 
-      <ToggleButton
-        value="check"
-        selected={filterSell}
-        onChange={() => onFilterSellChange((prevSelected) => !prevSelected)}
-      >
-        <Chip label="SELL" size="small" />
-      </ToggleButton>
+        <ToggleButtonGroup
+          exclusive
+          aria-label="Relic Color Filter"
+          value={selectedColor}
+          onChange={(_, newColor) => {
+            if (newColor !== null) {
+              onColorChange(newColor);
+            }
+          }}
+        >
+          {colorFilterOptions.map((option) => (
+            <ToggleButton
+              key={option.color}
+              value={option}
+              sx={{ textTransform: "none" }}
+            >
+              <RelicColorChip color={option.color} type={option.type} />
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+
+        <ToggleButton
+          value="check"
+          selected={filterSell}
+          onChange={() => onFilterSellChange((prevSelected) => !prevSelected)}
+        >
+          <Chip label="SELL" size="small" />
+        </ToggleButton>
+
+        <ToggleButton
+          value="advanced"
+          selected={advancedOpen}
+          onChange={() => setAdvancedOpen((prev) => !prev)}
+          aria-label="Toggle advanced search"
+        >
+          <TuneIcon fontSize="small" />
+        </ToggleButton>
+      </Box>
+
+      <Collapse in={advancedOpen}>
+        <Box sx={{ mt: 2 }}>
+          <AdvancedSearchPanel
+            availableEffects={availableEffects}
+            effectFilter={effectFilter}
+            onEffectFilterChange={onEffectFilterChange}
+          />
+        </Box>
+      </Collapse>
     </Box>
   );
 };
