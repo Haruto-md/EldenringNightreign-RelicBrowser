@@ -148,7 +148,7 @@ export class RelicParser {
             if (b4 === 0xc0) {
               const slotData = currentEntryOffset.slice(i, i + slotSize);
               const idBytes = slotData.slice(0, 4);
-              const id = this.readIntLE(idBytes);
+              const id = this.readIntLE(idBytes) >>> 0;
 
               // Extract item ID (bytes 4-6)
               const itemIdBytes = slotData.slice(4, 7);
@@ -189,6 +189,8 @@ export class RelicParser {
                 // coordinates will be set later
                 coordinates: [0, 0],
                 coordinatesByColor: [0, 0],
+                byteOffset: patternOffsetStart + i,
+                slotSize,
               };
               foundSlots.push(slotInfo);
             }

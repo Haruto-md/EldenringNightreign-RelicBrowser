@@ -132,6 +132,24 @@ describe("Save File Processing", () => {
         expect(firstRelic.effects.length).toBeGreaterThan(0);
       });
 
+      it("should record each relic's absolute byte offset and slot size", () => {
+        const names = RelicParser.getNames(bnd4Entries[10]);
+        const slot = RelicParser.parseCharacterSlot(names[0], bnd4Entries[0]);
+        if (slot.relics.length === 0) {
+          return;
+        }
+        for (const relic of slot.relics) {
+          expect(relic.byteOffset).toBeTypeOf("number");
+          expect(relic.slotSize).toBe(80);
+          // The slot's id bytes (first 4 bytes of the slot) must be readable
+          // back out of cleanData at byteOffset.
+          const idAtOffset = bnd4Entries[0].cleanData
+            .slice(relic.byteOffset!, relic.byteOffset! + 4)
+            .reduce((acc, byte, i) => acc | (byte << (8 * i)), 0) >>> 0;
+          expect(idAtOffset).toBe(relic.id);
+        }
+      });
+
       it("should handle UTF-16LE character names correctly", () => {
         const names = RelicParser.getNames(bnd4Entries[10]);
         expect(names).toHaveLength(testEntry.slots.length);

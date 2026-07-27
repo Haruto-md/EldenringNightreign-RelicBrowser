@@ -25,6 +25,8 @@ export interface RelicSlot {
   sortKey?: number;
   idBytes?: Uint8Array;
   redundant?: { relic: RelicSlot; outclassed: boolean };
+  byteOffset?: number;
+  slotSize?: number;
 }
 
 export type CompactRelicSlot =
