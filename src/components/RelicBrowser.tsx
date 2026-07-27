@@ -12,6 +12,7 @@ import { RelicSlotColor } from "../utils/RelicColor";
 import { doesRelicColorMatch, doesRelicMatch } from "../utils/SearchUtils";
 import { RelicDisplay } from "./RelicDisplay";
 import { SearchInput } from "./SearchInput";
+import { SellCandidatesPanel } from "./SellCandidatesPanel";
 
 interface RelicBrowserProps {
   availableEffects: Effect[];
@@ -32,6 +33,11 @@ export function RelicBrowser({
   const [colorFilter, setColorFilter] = useState<ColorFilterOption>(
     colorFilterOptions[0]
   );
+  const [selectedForSale, setSelectedForSale] = useState<
+    CharacterSlot["relics"]
+  >([]);
+  // Not consumed yet — Task 5 wires this into the delete/download flow.
+  void selectedForSale;
 
   const matchingRelics = useMemo(() => {
     if (
@@ -122,6 +128,13 @@ export function RelicBrowser({
         filterSell={filterSell}
         onFilterSellChange={setFilterSell}
       />
+
+      {filterSell && (
+        <SellCandidatesPanel
+          relics={currentSlot.relics}
+          onSelectionChange={setSelectedForSale}
+        />
+      )}
 
       <Typography variant="subtitle2" textAlign="center" gutterBottom>
         {currentSlot.relics.length === matchingRelics.length

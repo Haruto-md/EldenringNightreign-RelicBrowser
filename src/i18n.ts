@@ -14,6 +14,10 @@ const resources = {
       demoDescription: "Load sample relics to explore the interface",
       features: "Features",
 
+      sellCandidatesTitle: "Sell candidates ({{count}})",
+      sellCandidatesSelectAll: "Select all",
+      sellCandidatesSelectNone: "Select none",
+
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",
         [Nightfarer.Guardian]: "Guardian",
