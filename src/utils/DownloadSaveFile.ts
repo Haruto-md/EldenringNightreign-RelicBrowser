@@ -1,20 +1,30 @@
 import { unsellableItemIds } from "../resources/items";
 import type { BND4Entry, RelicSlot } from "../types/SaveFile";
+import type { RelicDeletion } from "./SaveFileEncryptor";
 
 export function buildDeletionPlan(
   selectedRelics: RelicSlot[],
   entry: BND4Entry
-): { entry: BND4Entry; byteOffset: number; slotSize: number }[] {
+): RelicDeletion[] {
   return selectedRelics
     .filter((relic) => !unsellableItemIds.includes(relic.itemId))
     .filter(
-      (relic): relic is RelicSlot & { byteOffset: number; slotSize: number } =>
-        relic.byteOffset !== undefined && relic.slotSize !== undefined
+      (
+        relic
+      ): relic is RelicSlot & {
+        byteOffset: number;
+        slotSize: number;
+        idBytes: Uint8Array;
+      } =>
+        relic.byteOffset !== undefined &&
+        relic.slotSize !== undefined &&
+        relic.idBytes !== undefined
     )
     .map((relic) => ({
       entry,
       byteOffset: relic.byteOffset,
       slotSize: relic.slotSize,
+      idBytes: relic.idBytes,
     }));
 }
 
