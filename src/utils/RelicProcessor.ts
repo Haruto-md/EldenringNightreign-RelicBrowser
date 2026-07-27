@@ -1,4 +1,5 @@
 import { items, ItemType } from "../resources/items";
+import type { Effect } from "../resources/effects";
 import type { RelicSlot } from "../types/SaveFile";
 import { getEffectGroup, getRelicColor } from "./DataUtils";
 import { RelicSlotColor, type RelicColor } from "./RelicColor";
@@ -21,73 +22,103 @@ export function sortRelicsByColor(
   return sortedRelics;
 }
 
+function compareDebuffs(
+  originalDebuff: Effect | undefined,
+  candidateDebuff: Effect | undefined
+): { comparable: boolean; better: boolean } {
+  if (originalDebuff === undefined && candidateDebuff === undefined) {
+    return { comparable: true, better: false };
+  }
+  if (originalDebuff === undefined && candidateDebuff !== undefined) {
+    // The candidate adds a demerit the original doesn't have - strictly worse, not comparable.
+    return { comparable: false, better: false };
+  }
+  if (originalDebuff !== undefined && candidateDebuff === undefined) {
+    // The candidate removes the demerit - strictly better.
+    return { comparable: true, better: true };
+  }
+  if (originalDebuff === candidateDebuff) {
+    return { comparable: true, better: false };
+  }
+  // Different demerits aren't rankable against each other.
+  return { comparable: false, better: false };
+}
+
 export function findBetterRelic(
   relic: RelicSlot,
   relics: RelicSlot[]
 ): RelicSlot["redundant"] {
-  const effects = relic.effects.map(([effect]) => effect);
   const relicsWithEnoughEffects = relics.filter(
-    (r) => r.effects.length >= effects.length
+    (r) => r.effects.length >= relic.effects.length
   );
+
   const betterOrEqualRelic = relicsWithEnoughEffects.find((r) => {
     if (relic === r) {
       return false;
     }
-    const otherEffects = r.effects.map(([effect]) => effect);
-    const isRedundant = effects.every((effect) => {
+
+    return relic.effects.every(([effect, debuff]) => {
       const effectGroup = getEffectGroup(effect);
-      if (!effectGroup && otherEffects.includes(effect)) {
-        // The effect is present in both relics.
-        return true;
-      }
-      if (effectGroup) {
-        const otherEffectGroups = otherEffects.map(getEffectGroup);
-        const otherEffectGroup = otherEffectGroups.find(
-          (g) => g && g.group === effectGroup.group
-        );
-        if (otherEffectGroup) {
-          // Both relics have the same effect group.
-          if (otherEffectGroup.level >= effectGroup.level) {
-            // The other relic has the same or higher level effect.
-            return true;
-          }
-        }
-      }
-      return false;
+
+      return r.effects.some(([otherEffect, otherDebuff]) => {
+        const effectMatches = effectGroup
+          ? (() => {
+              const otherEffectGroup = getEffectGroup(otherEffect);
+              return (
+                otherEffectGroup !== undefined &&
+                otherEffectGroup.group === effectGroup.group &&
+                otherEffectGroup.level >= effectGroup.level
+              );
+            })()
+          : otherEffect === effect;
+
+        return effectMatches && compareDebuffs(debuff, otherDebuff).comparable;
+      });
     });
-    return isRedundant;
   });
 
-  if (betterOrEqualRelic) {
-    // Determine if the relic is outclassed
-    let outclassed = false;
-
-    // Check if the other relic has more effects
-    if (betterOrEqualRelic.effects.length > effects.length) {
-      outclassed = true;
-    } else {
-      // Check if any effect group has a higher level
-      for (const effect of effects) {
-        const effectGroup = getEffectGroup(effect);
-        if (effectGroup) {
-          const otherEffectGroups = betterOrEqualRelic.effects.map(([effect]) =>
-            getEffectGroup(effect)
-          );
-          const otherEffectGroup = otherEffectGroups.find(
-            (g) => g && g.group === effectGroup.group
-          );
-          if (otherEffectGroup && otherEffectGroup.level > effectGroup.level) {
-            outclassed = true;
-            break;
-          }
-        }
-      }
-    }
-
-    return { relic: betterOrEqualRelic, outclassed };
+  if (!betterOrEqualRelic) {
+    return undefined;
   }
 
-  return undefined;
+  // Determine if the relic is outclassed
+  let outclassed = false;
+
+  if (betterOrEqualRelic.effects.length > relic.effects.length) {
+    outclassed = true;
+  } else {
+    for (const [effect, debuff] of relic.effects) {
+      const effectGroup = getEffectGroup(effect);
+
+      const matchingPair = betterOrEqualRelic.effects.find(
+        ([otherEffect]) => {
+          if (!effectGroup) {
+            return otherEffect === effect;
+          }
+          const otherEffectGroup = getEffectGroup(otherEffect);
+          return (
+            otherEffectGroup !== undefined &&
+            otherEffectGroup.group === effectGroup.group
+          );
+        }
+      );
+
+      if (effectGroup && matchingPair) {
+        const otherEffectGroup = getEffectGroup(matchingPair[0]);
+        if (otherEffectGroup && otherEffectGroup.level > effectGroup.level) {
+          outclassed = true;
+          break;
+        }
+      }
+
+      if (matchingPair && compareDebuffs(debuff, matchingPair[1]).better) {
+        outclassed = true;
+        break;
+      }
+    }
+  }
+
+  return { relic: betterOrEqualRelic, outclassed };
 }
 
 export function findOutclassedRelics(relics: RelicSlot[]): void {
