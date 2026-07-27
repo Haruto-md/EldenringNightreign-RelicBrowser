@@ -145,20 +145,21 @@ export function RelicBrowser({
         onFilterSellChange={setFilterSell}
         effectFilter={effectFilter}
         onEffectFilterChange={setEffectFilter}
-        countText={
-          currentSlot.relics.length === matchingRelics.length
-            ? t("showingAllRelicsTemplate", {
-                normal: normalRelicsCount,
-                deep: deepRelicsCount,
-                character: currentSlot.name,
-              })
-            : t("showingMatchingRelicsTemplate", {
-                normal: normalRelicsCount,
-                deep: deepRelicsCount,
-                total: currentSlot.relics.length,
-                character: currentSlot.name,
-              })
-        }
+        // カウントの桁数でUIが変わるのは圧倒的不良UI
+        // countText={
+        //   currentSlot.relics.length === matchingRelics.length
+        //     ? t("showingAllRelicsTemplate", {
+        //         normal: normalRelicsCount,
+        //         deep: deepRelicsCount,
+        //         character: currentSlot.name,
+        //       })
+        //     : t("showingMatchingRelicsTemplate", {
+        //         normal: normalRelicsCount,
+        //         deep: deepRelicsCount,
+        //         total: currentSlot.relics.length,
+        //         character: currentSlot.name,
+        //       })
+        // }
       />
 
       {currentSlot && (
