@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import type { CharacterSlot, SaveFileData } from "../types/SaveFile";
-import { getCompactCharacterSlot } from "../utils/DataUtils";
 import { RelicParser } from "../utils/RelicParser";
 import { findOutclassedRelics } from "../utils/RelicProcessor";
 import { SaveFileDecryptor } from "../utils/SaveFileDecryptor";
@@ -11,43 +10,6 @@ export const useSaveFile = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [matchingRelicsCount, setMatchingRelicsCount] = useState<number>(0);
-
-  // Load demo data
-  const loadDemoData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const demoResponse = await fetch("/demo.json");
-      if (!demoResponse.ok) {
-        throw new Error("Failed to load demo data");
-      }
-
-      const demoData = await demoResponse.json();
-
-      // Create a single character slot with the demo data
-      const demoSlot = getCompactCharacterSlot(demoData);
-      findOutclassedRelics(demoSlot.relics);
-
-      const saveData: SaveFileData = {
-        filePath: "demo.json",
-        slots: [demoSlot],
-        currentSlot: 0,
-      };
-
-      setSaveFileData(saveData);
-
-      // Track demo view
-      window.dataLayer.push({
-        event: "demo_viewed",
-      });
-    } catch (err) {
-      console.error("Error loading demo data:", err);
-      setError(err instanceof Error ? err.message : "Failed to load demo data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   // Load and parse save file
   const loadSaveFile = useCallback(async (file: File) => {
@@ -136,7 +98,6 @@ export const useSaveFile = () => {
     loading,
     error,
     loadSaveFile,
-    loadDemoData,
     selectSlot,
     searchTerm,
     setSearchTerm,

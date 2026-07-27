@@ -1,5 +1,5 @@
 import TuneIcon from "@mui/icons-material/Tune";
-import { Box, Chip, Collapse, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { Box, Chip, Collapse, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import React, { type Dispatch, type SetStateAction, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type Effect } from "../resources/effects";
@@ -21,6 +21,7 @@ interface SearchInputProps {
   onFilterSellChange: Dispatch<SetStateAction<boolean>>;
   effectFilter: EffectFilterState;
   onEffectFilterChange: (filter: EffectFilterState) => void;
+  countText: string;
 }
 
 export const SearchInput: React.FC<SearchInputProps> = ({
@@ -32,6 +33,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   onFilterSellChange,
   effectFilter,
   onEffectFilterChange,
+  countText,
 }) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const { t } = useTranslation();
@@ -43,6 +45,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           display: "flex",
           flexDirection: "row",
           justifyContent: "center",
+          alignItems: "center",
           flexWrap: "wrap",
           gap: 2,
         }}
@@ -90,6 +93,10 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         >
           <TuneIcon fontSize="small" />
         </ToggleButton>
+
+        <Typography variant="caption" color="text.secondary">
+          {countText}
+        </Typography>
       </Box>
 
       <Collapse in={advancedOpen}>

@@ -34,10 +34,8 @@ export function CharacterSlotSelect({
   return (
     <Box
       sx={{
-        p: 2,
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
       }}
     >
       <FormControl size="small" variant="outlined">

@@ -15,10 +15,6 @@ declare module "react-i18next" {
         welcomeTitle: string;
         welcomeSubtitle: string;
         uploadSaveFile: string;
-        tryDemo: string;
-        demo: string;
-        demoDescription: string;
-        features: string;
 
         // Relic browser
         searchPlaceholder: string;

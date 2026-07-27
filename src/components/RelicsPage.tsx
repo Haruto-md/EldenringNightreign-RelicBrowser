@@ -1,7 +1,17 @@
-import { Alert, AppBar, Box, CircularProgress, Tab, Tabs } from "@mui/material";
+import {
+  Alert,
+  AppBar,
+  Box,
+  CircularProgress,
+  IconButton,
+  Tab,
+  Tabs,
+  Tooltip,
+} from "@mui/material";
+import { Clear } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import type { SaveFileData } from "../types/SaveFile";
 import { CharacterSlotSelect } from "./CharacterSlotSelect";
 import { DamageOptimizer } from "./DamageOptimizer";
@@ -36,7 +46,6 @@ export function RelicsPage({
 }: RelicsPageProps) {
   const currentSlot = saveFileData?.slots[saveFileData.currentSlot];
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
 
   const [tab, setTab] = useState(TabIndex.RelicBrowser);
@@ -48,12 +57,12 @@ export function RelicsPage({
     };
   }, [clearSaveFile]);
 
-  // Navigate to home if no save file data (but not for demo route)
+  // Navigate to home if no save file data
   useEffect(() => {
-    if (!loading && !saveFileData && !location.pathname.includes("/demo")) {
+    if (!loading && !saveFileData) {
       navigate("/");
     }
-  }, [saveFileData, loading, navigate, location.pathname]);
+  }, [saveFileData, loading, navigate]);
 
   const availableEffects = useMemo(() => {
     if (!currentSlot) {
@@ -101,19 +110,43 @@ export function RelicsPage({
 
   return (
     <>
-      {saveFileData.slots.length > 1 && (
-        <CharacterSlotSelect
-          slots={saveFileData.slots}
-          value={saveFileData.currentSlot}
-          onChange={selectSlot}
-          label={t("character")}
-        />
-      )}
       <AppBar position="static" elevation={24}>
-        <Tabs value={tab} onChange={(_e, value) => setTab(value)} centered>
-          <Tab value={TabIndex.RelicBrowser} label={t("relicBrowserTab")} />
-          <Tab value={TabIndex.DamageOptimizer} label="ダメージ最適化" />
-        </Tabs>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            px: 1,
+          }}
+        >
+          <Box sx={{ minWidth: 0, flexShrink: 0 }}>
+            {saveFileData.slots.length > 1 && (
+              <CharacterSlotSelect
+                slots={saveFileData.slots}
+                value={saveFileData.currentSlot}
+                onChange={selectSlot}
+                label={t("character")}
+              />
+            )}
+          </Box>
+          <Tabs
+            value={tab}
+            onChange={(_e, value) => setTab(value)}
+            centered
+            sx={{ flexGrow: 1 }}
+          >
+            <Tab value={TabIndex.RelicBrowser} label={t("relicBrowserTab")} />
+            <Tab value={TabIndex.DamageOptimizer} label="ダメージ最適化" />
+          </Tabs>
+          <Tooltip title="Close Save File">
+            <IconButton
+              onClick={() => navigate("/")}
+              aria-label="Close Save File"
+              color="inherit"
+            >
+              <Clear />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </AppBar>
       {tab === TabIndex.RelicBrowser && (
         <RelicBrowser
