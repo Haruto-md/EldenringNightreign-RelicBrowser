@@ -1,5 +1,10 @@
 import { useCallback, useState } from "react";
 import type { CharacterSlot, SaveFileData } from "../types/SaveFile";
+import {
+  emptyDeleteLock,
+  recordDelete,
+  type DeleteLockState,
+} from "../utils/DeleteLock";
 import { getCompactCharacterSlot } from "../utils/DataUtils";
 import { RelicParser } from "../utils/RelicParser";
 import { findOutclassedRelics } from "../utils/RelicProcessor";
@@ -11,11 +16,21 @@ export const useSaveFile = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [matchingRelicsCount, setMatchingRelicsCount] = useState<number>(0);
+  // Scoped to the loaded save file, not to any component or character slot:
+  // it must survive tab switches (which unmount RelicBrowser) and slot
+  // switches, and reset only when a new file is loaded or the file is cleared.
+  const [deleteLock, setDeleteLock] =
+    useState<DeleteLockState>(emptyDeleteLock);
+
+  const markEntryDeleted = useCallback((entryIndex: number) => {
+    setDeleteLock((prev) => recordDelete(prev, entryIndex));
+  }, []);
 
   // Load demo data
   const loadDemoData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setDeleteLock(emptyDeleteLock);
 
     try {
       const demoResponse = await fetch("/demo.json");
@@ -53,6 +68,8 @@ export const useSaveFile = () => {
   const loadSaveFile = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
+    // A genuinely new file means fresh, non-stale in-memory bytes.
+    setDeleteLock(emptyDeleteLock);
 
     try {
       const fileBuffer = await file.arrayBuffer();
@@ -123,9 +140,12 @@ export const useSaveFile = () => {
     setSearchTerm("");
     setMatchingRelicsCount(0);
     setError(null);
+    setDeleteLock(emptyDeleteLock);
   }, []);
 
   return {
+    deleteLock,
+    markEntryDeleted,
     saveFileData,
     loading,
     error,

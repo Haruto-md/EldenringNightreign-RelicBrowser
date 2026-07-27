@@ -21,6 +21,7 @@ import {
   type ColorFilterOption,
 } from "../utils/ColorFilterOptions";
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
+import { isDeleteLocked, type DeleteLockState } from "../utils/DeleteLock";
 import { buildDeletionPlan, downloadSaveFile } from "../utils/DownloadSaveFile";
 import { RelicSlotColor } from "../utils/RelicColor";
 import { SaveFileEncryptor } from "../utils/SaveFileEncryptor";
@@ -37,6 +38,15 @@ interface RelicBrowserProps {
   handleMatchingRelicsCountChange: (count: number) => void;
   currentEntry?: BND4Entry;
   saveFileName?: string;
+  /**
+   * Owned by `useSaveFile` so it is scoped to the loaded save file rather than
+   * to this component instance. Keeping it here as local state let a tab
+   * switch (which unmounts this component) or a character-slot change silently
+   * unlock the delete flow, after which the next download was rebuilt from the
+   * untouched original bytes and lost the first delete.
+   */
+  deleteLock: DeleteLockState;
+  markEntryDeleted: (entryIndex: number) => void;
 }
 
 export function RelicBrowser({
@@ -47,6 +57,8 @@ export function RelicBrowser({
   handleMatchingRelicsCountChange,
   currentEntry,
   saveFileName,
+  deleteLock,
+  markEntryDeleted,
 }: RelicBrowserProps) {
   const { t } = useTranslation();
   const [filterSell, setFilterSell] = useState(false);
@@ -58,14 +70,16 @@ export function RelicBrowser({
   >([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // Once a delete has succeeded, the in-memory entry still holds the ORIGINAL
-  // bytes, so a second delete in the same session would silently drop the
-  // first batch's deletions. Lock the flow until a new file is loaded.
-  const [deleteCompleted, setDeleteCompleted] = useState(false);
+  // Once a delete has succeeded, every in-memory entry of this file still
+  // holds the ORIGINAL bytes (they all share one `rawData` buffer), so any
+  // second delete would silently drop the first batch's deletions. The lock is
+  // held by `useSaveFile`, keyed to the loaded file, so it cannot be reset by
+  // unmounting this component or by switching character slot.
+  const deleteCompleted = isDeleteLocked(deleteLock);
 
-  // Loading a different save file / character resets the lock.
+  // Switching character only clears a stale error message; it must NOT touch
+  // the lock (see above).
   useEffect(() => {
-    setDeleteCompleted(false);
     setDeleteError(null);
   }, [currentEntry]);
 
@@ -86,7 +100,7 @@ export function RelicBrowser({
       setDeleteError(null);
       setSelectedForSale([]);
       setConfirmOpen(false);
-      setDeleteCompleted(true);
+      markEntryDeleted(currentEntry.index);
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : t("deleteConfirmError")

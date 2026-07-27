@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { SaveFileData } from "../types/SaveFile";
+import type { DeleteLockState } from "../utils/DeleteLock";
 import { RelicsPage } from "./RelicsPage";
 
 interface DemoRelicsPageProps {
@@ -13,6 +14,8 @@ interface DemoRelicsPageProps {
   matchingRelicsCount: number;
   handleMatchingRelicsCountChange: (count: number) => void;
   clearSaveFile: () => void;
+  deleteLock: DeleteLockState;
+  markEntryDeleted: (entryIndex: number) => void;
 }
 
 export function DemoRelicsPage({
