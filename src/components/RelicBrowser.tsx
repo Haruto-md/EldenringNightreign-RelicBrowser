@@ -1,4 +1,4 @@
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
@@ -145,22 +145,21 @@ export function RelicBrowser({
         onFilterSellChange={setFilterSell}
         effectFilter={effectFilter}
         onEffectFilterChange={setEffectFilter}
+        countText={
+          currentSlot.relics.length === matchingRelics.length
+            ? t("showingAllRelicsTemplate", {
+                normal: normalRelicsCount,
+                deep: deepRelicsCount,
+                character: currentSlot.name,
+              })
+            : t("showingMatchingRelicsTemplate", {
+                normal: normalRelicsCount,
+                deep: deepRelicsCount,
+                total: currentSlot.relics.length,
+                character: currentSlot.name,
+              })
+        }
       />
-
-      <Typography variant="subtitle2" textAlign="center" gutterBottom>
-        {currentSlot.relics.length === matchingRelics.length
-          ? t("showingAllRelicsTemplate", {
-              normal: normalRelicsCount,
-              deep: deepRelicsCount,
-              character: currentSlot.name,
-            })
-          : t("showingMatchingRelicsTemplate", {
-              normal: normalRelicsCount,
-              deep: deepRelicsCount,
-              total: currentSlot.relics.length,
-              character: currentSlot.name,
-            })}
-      </Typography>
 
       {currentSlot && (
         <Box
