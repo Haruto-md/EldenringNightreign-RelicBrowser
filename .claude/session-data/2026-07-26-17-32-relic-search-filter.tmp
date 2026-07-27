@@ -1,0 +1,39 @@
+PROJECT: EldenringNR-Relic (Relic Browser)
+CREATED: 2026-07-26 17:32
+WHAT WE'RE BUILDING: Advanced Search filter (AND/OR effect groups, at-least/at-most level comparison, exclude list, RelicHub-sourced category picker) for the Relic Browser; also merged a separate in-progress Damage Optimizer feature into main during this session.
+
+## 完了・検証済み
+- relic-search-filter-engine の設計書とプランを brainstorming/writing-plans スキルで作成、docs/superpowers/specs/2026-07-26-relic-search-filter-engine-design.md と docs/superpowers/plans/2026-07-26-relic-search-filter-engine.md にコミット済み。
+- subagent-driven-development で全8タスクを実装・レビュー・完了。src/utils/EffectFilter.ts（AND-of-OR-groups + NOT マッチャー）、src/resources/effectCategories.ts（RelicHub skills.json から生成、scripts/generate-effect-categories.mjs）、src/components/EffectFilterChip.tsx、src/components/AdvancedSearchPanel.tsx、SearchInput.tsx/RelicBrowser.tsx への配線、すべて実装・レビュー済み。
+- 最終whole-branchレビュー(opus)で "Ready to merge with fixes" 判定。Important指摘1件（doesRelicMatchEffectFilterが未使用時も毎回relicごとに走る）を修正(commit 6fd90f4)、スコープ限定re-reviewでclean。
+- worktree-relic-search-filter-engine を main に fast-forward マージ済み（コミット `6fd90f4` が main の HEAD だった時点）。
+- 別途進行中だった damage-optimization ブランチ（Damage Optimizer タブ、must-have効果フィルタ、日本語名表示、WASMのクリティカルなプルーニングバグ修正済み）も main にマージ済み（マージコミット `4790f90`）。EffectsAutocomplete.tsx で1件コンフリクト（groupByCategory prop と getLabel prop、両方採用で解決）。マージ後 lint/type-check/test全てクリーン（119 passed, 1 pre-existing skip）。
+- ユーザーから2件の訂正を受けて記憶(memory)を修正済み: (1) src/i18n.ts には ja: ブロックが一切存在しない（以前のmemoryの「479件は日本語あり」という記述は誤りだった、訂正済み）。(2) 次にやりたいのは「英語→日本語のライブ検索マッチング」ではなく「RelicHubのeng/jpnマッチング手法を使ってi18n.tsにja:ブロックを生成する」こと。
+- リポジトリルートにあった文字化けファイル名（"C:GameFolderutilsEldenringNR-Relicsrci18n.ts"、Windowsパスがそのままファイル名になった壊れたcpコマンドの産物）を発見。中身は src/i18n.ts のコピー + 未完成の ja: 翻訳ブロック（500行超、構文エラーあり・パース不可）。削除せず退避済み: C:\Users\amate\AppData\Local\Temp\claude\C--GameFolder-utils-EldenringNR-Relic\11cc308a-3914-4d42-86ce-d2b5c12e7bd2\scratchpad\recovered-i18n-with-ja.ts
+- 使用した2つのworktree（relic-search-filter-engine, damage-optimization）とその中の1つの誤ってisolation:"worktree"で作られたstray worktree(agent-a2dd28b87046bf45d)は git worktree削除・ブランチ削除済み。ただし物理ディレクトリ3つ（.claude/worktrees/relic-search-filter-engine, .worktrees/damage-optimization, および削除済みagentワークツリー跡）は "Device or resource busy" で完全には削除できず、gitの追跡からは外れているがディスク上に空フォルダとして残っている可能性あり（手動削除で問題ない）。
+
+## 試して失敗
+- Task 1のimplementer subagentをisolation:"worktree"付きでdispatchしたところ、無関係な別worktree(agent-a2dd28b87046bf45d)にコミットが作られ、しかもそのworktreeがstale base（origin/main由来、このセッションのplan/specコミットを含まない）だったため brief ファイルにアクセスできなかった。以降のタスクはisolationパラメータなしでdispatchするよう修正。
+- lint修正のfix-loop 1回目（haiku、EffectFilter.test.tsのunused variable修正）が、意図せずテストの意味を変えてしまった（atLeastテストの比較対象effectを変更してequal-levelのみのテストに縮退、さらにEffectFilter.keyを生のnumeric effect idと誤用してテストが壊れた）。controllerが直接修正して復旧（commit 6f62259）。
+- Task 3のプラン当初案は scripts/damage-multiplier-matching.mjs / generate-damage-multipliers.mjs をimportして再利用する想定だったが、これらは damage-optimization ブランチのuntrackedファイルでmainには存在しないと判明（implementerがNEEDS_CONTEXTを正しく報告）。プランを修正し、必要な3つのmatchingヘルパーをgenerate-effect-categories.mjs内にローカルで再実装する方針に変更してタスクを再開した。
+
+## 次にやること
+- ユーザーへの質問が未回答: recovered-i18n-with-ja.ts（scratchpad退避済みの壊れたja:翻訳ドラフト）を復旧・完成させて、次の日本語i18n作業のベースにするかどうか。
+- 次の機能候補（decomposeして後日ブレストする前提で合意済み、未着手）:
+  1. RelicHubのeng/jpnマッチングを使い、src/i18n.tsにja:ブロックを生成する（今回のsession終盤で要求された最優先タスク）。scripts/generate-effect-categories.mjsで確立したローカルmatchingヘルパーのパターンを流用できる。
+  2. RelicProcessor.tsのredundant/outclassed自動判定をdemerit対応に書き換える（現状demeritを無視した比較ロジックで不正確、と本人から指摘あり）。
+  3. 手動「売る」マーキング機能＋座標付きエクスポート（将来のキーボード自動化ツール向け、別プロジェクト扱い）。
+- damage-optimizationのSDD ledgerに記載されていた「人間によるブラウザでの目視スモークテスト」は結局未実施のまま今回mainにマージした。次にDamage Optimizerタブを触る機会があれば一度ブラウザで動作確認するとよい。
+- 物理的に残っている空worktreeディレクトリ（.claude/worktrees/relic-search-filter-engine, .worktrees/damage-optimization）は手動削除で問題ない（gitはもう追跡していない）。
+
+## 参照パス
+- docs/superpowers/specs/2026-07-26-relic-search-filter-engine-design.md
+- docs/superpowers/plans/2026-07-26-relic-search-filter-engine.md
+- src/utils/EffectFilter.ts
+- src/resources/effectCategories.ts
+- scripts/generate-effect-categories.mjs
+- src/components/AdvancedSearchPanel.tsx
+- src/components/EffectFilterChip.tsx
+- C:\Users\amate\AppData\Local\Temp\claude\C--GameFolder-utils-EldenringNR-Relic\11cc308a-3914-4d42-86ce-d2b5c12e7bd2\scratchpad\recovered-i18n-with-ja.ts（壊れたja:翻訳ドラフト、要復旧判断）
+- C:\Users\amate\.claude\projects\C--GameFolder-utils-EldenringNR-Relic\memory\relic-search-filter-engine-project.md（このセッションで作成したproject memory）
+- C:\Users\amate\.claude\projects\C--GameFolder-utils-EldenringNR-Relic\memory\relichub-data-reference.md（ja:ブロックが存在しないことを訂正済み）

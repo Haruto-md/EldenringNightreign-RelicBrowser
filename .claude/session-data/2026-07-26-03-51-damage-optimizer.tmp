@@ -1,0 +1,40 @@
+PROJECT: EldenringNR-Relic (Elden Ring Nightreign Relic Browser)
+CREATED: 2026-07-26 03:51
+WHAT WE'RE BUILDING: Redesign of the "ダメージ最適化" (Damage Optimizer) tab on branch `damage-optimization` (worktree `.worktrees/damage-optimization`) — fixing a fragile RelicHub-string-matching bridge that made effects/names silently vanish/leak English, adding a ComboFinder-style must-have effect+quantity filter, and fixing a critical WASM search bug.
+
+## 完了・検証済み
+- Plan `docs/superpowers/plans/2026-07-26-damage-optimizer-data-robustness-and-musthaves.md`, all 6 tasks implemented via subagent-driven-development, each task-reviewed, final whole-branch review passed (merge-ready verdict).
+- Design principle: effect lists driven from authoritative `src/resources/effects.ts` (850 keys), never from the RelicHub-matched subset; `effectNameJa(key)` accessor guarantees non-empty (Japanese or English fallback) — no effect can vanish from UI.
+- Japanese Nightfarer/vessel names sourced from `RelicHub/data/vessels.json` (`nightfarerNamesJa.ts`, `vesselNamesJa.ts`), matched by explicit key map (vessels.json keys are misspelled: `gurdian`,`revnant`,`execuor`) and 6-slot color signature (positional fallback removed after review found it could silently mismatch Chalice/Urn).
+- Must-have effect+quantity picker built (reuses ComboFinder's `selectedEffectRanges` WASM mechanism via `EffectsAutocomplete`'s new optional `getLabel` prop).
+- 5 real bugs found via live user testing after the "complete" redesign, all fixed and verified (type-check clean, lint clean, 94 tests pass, wasm rebuilt) — commits in order:
+  1. `2d2d66f` — RelicHub skills.json typo 陰者→隠者 (Recluse), normalized via `RELICHUB_JA_TYPO_FIXES`.
+  2. `971fbc7` — ranking multiplier was including ALL `conditionalGroup`s (not just characterExclusive), causing junk rankings (e.g. Recluse+magic search inflated ×6.48 by unrelated bleed/weapon-type-3 effects). Fixed: only `characterExclusive` counts toward ranking; other conditionals are must-have-only.
+  3. `802003a` — must-have picker offered non-relic-obtainable effects (e.g. Raider's innate passive `raiderPermanentlyIncreaseAttackPower`, no RelicHub skills.json/deep.json entry). Fixed: derive must-have options from `currentSlot.relics` (like ComboFinder), not the full `effectsArray`.
+  4. `47d6c4e` — **CRITICAL**: `search_group_triples` (wasm/combo_search/src/lib.rs) pruned its per-group top-200 (`TOP_GROUP_RESULTS`) list purely by damage points; a must-have effect with no damage multiplier always lost that contest and got evicted before the final range-check ever ran, producing "結果がありません" even with a satisfiable must-have combo. Fixed: rank triples by `(carries_musthave, points)` lexicographic priority. Regression test added — verified FAILS without the fix, PASSES with it (250 higher-damage fillers vs 1 must-have-only relic).
+  5. `1e72602` — 44 more effects had English leaking due to RelicHub `eng` wording diverging from i18n.ts `en` wording (verb tense/punctuation/reordering — e.g. "Art gauge fills moderately upon critical hit +1"). Added to `MANUAL_EFFECT_KEY_OVERRIDES`. `effectNamesJa.ts`: 474→518 entries.
+- Also earlier in session: `vite.config.ts` got COOP/COEP headers (SharedArrayBuffer/multithread WASM), manual 検索 button replacing auto-search, 系統 (school) select got a なし (none) option.
+- User confirmed "隠者" (Recluse) typo fix and one instance of English leak fix directly by inspecting the UI.
+
+## 試して失敗
+- Positional-index fallback for `vesselNamesJa` matching (Task 2) — review found it could silently assign the WRONG vessel's Japanese name (Chalice↔Urn index swap between `Vessels.ts` and `vessels.json` ordering) when signature matching failed. Removed; now emits nothing (English fallback) rather than emit a possibly-wrong name.
+- Blindly trusting a task reviewer's "Critical: missing file" finding on Task 1 — investigated and it was a false positive (file was committed at baseline, regeneration was idempotent). Don't skip independent verification of reviewer findings when cross-task context contradicts them.
+
+## 次にやること
+- **Human manual browser smoke test still pending** — this is the only remaining step before merge. Restart the dev server first (`cd .worktrees/damage-optimization && npm run dev`) since vite.config.ts changed (COOP/COEP) and many generated modules were added/changed — a stale bundle will show old English names. Hard-refresh the browser after.
+- Checklist to verify in-browser: character names Japanese (追跡者/復讐者/隠者/執行者 etc.); 魔術/祈祷 selection shows 系統 with a なし option; 必須効果 search lists only effects the player's own relics actually have, in Japanese; adding a must-have + minimum quantity and pressing 検索 actually filters/finds results (this was the critical bug just fixed — needs real-data confirmation); results show `×N.NN（+NN%）`; 6 relic slots show Japanese names with contributing effects highlighted; vessel titles Japanese with color chips.
+- Known unresolved RelicHub data bug (not yet fixed, flagged for follow-up, currently safe English fallback): id 285 (Cerulean Hidden Tear) and id 269 (Greenspill Crystal Tear) share the same wrong `eng` string in RelicHub's skills.json, so `buildJpnToEngLookup`'s first-wins matching assigns id 269's Japanese text incorrectly. Fixing needs a `buildEngToJpnLookup`/matching-logic change, not just an override entry.
+- After smoke test passes: use `superpowers:finishing-a-development-branch` to decide merge/PR path.
+- Consider whether other conditionalGroups besides characterExclusive should have narrower always-on rules (e.g. auto-activating `threeOrMoreOfWeaponType` for the selected weapon category) — explicitly deferred as a "possible future enhancement", not required now.
+
+## 参照パス
+- Plan: `docs/superpowers/plans/2026-07-26-damage-optimizer-data-robustness-and-musthaves.md`
+- Progress ledger: `.worktrees/damage-optimization/.superpowers/sdd/progress.md` (detailed task-by-task + post-review bug log)
+- Design doc (source of truth for domain facts): `docs/superpowers/specs/2026-07-25-damage-optimization-design.md`
+- Main UI: `.worktrees/damage-optimization/src/components/DamageOptimizer.tsx`
+- Relic slot display: `.worktrees/damage-optimization/src/components/DamageRelicSlot.tsx`
+- Multiplier array builder: `.worktrees/damage-optimization/src/utils/DamageMultiplierArray.ts`
+- Search engine (Rust/WASM): `.worktrees/damage-optimization/wasm/combo_search/src/lib.rs`
+- Generator (RelicHub -> generated JP data files): `.worktrees/damage-optimization/scripts/generate-damage-multipliers.mjs`
+- Manual overrides report: `.worktrees/damage-optimization/.superpowers/sdd/musthave-jpn-overrides-report.md`
+- Memory (persistent across sessions): `damage-optimization-project.md`, `relichub-data-reference.md` in the memory dir — both updated this session with the redesign + bug-fix history.

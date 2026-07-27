@@ -65,6 +65,70 @@ const MANUAL_EFFECT_KEY_OVERRIDES = {
   "結晶人の魔術を強化": "improvedCrystalianSorcery",
   "HP低下時、周囲の味方を含めHPをゆっくりと回復":
     "slowlyRestoreHpForSelfAndNearbyAlliesWhenHpIsLow",
+
+  // RelicHub Title-cases this one ("+1 Additional Character Skill Use"),
+  // i18n does not ("+1 additional Character Skill use").
+  "【追跡者】スキルの使用回数+1": "wylderAdditionalCharacterSkillUse",
+
+  // Remaining wording/capitalization/punctuation mismatches between
+  // RelicHub's `eng` field and i18n.ts's English text, found by running
+  // this script and inspecting every entry in its "could not be matched"
+  // warning output against src/i18n.ts.
+  "魔術師塔の仕掛けが解除される度、最大FP上昇":
+    "maxFpPermanentlyIncreasedAfterReleasingSorcerersRiseMechanism",
+  "大教会の強敵を倒す度、最大HP上昇": "maxHPIncreasedForEachGreatEnemyDefeatedAtAGreatChurch",
+  "攻撃を受けると攻撃力上昇": "takingAttacksImprovesAttackPower",
+  "封牢の囚を倒す度、攻撃力上昇": "attackPowerPermanentlyIncreasedForEachEvergaolPrisonerDefeated",
+  "夜の侵入者を倒す度、攻撃力上昇": "attackPowerUpAfterDefeatingANightInvader",
+  "脂アイテム使用時、追加で物理攻撃力上昇": "attackPowerIncreasesAfterUsingGreaseItems",
+  "ガード中、敵に狙われやすくなる": "drawEnemyAttentionWhileGuarding",
+  "ジェスチャー「あぐら」により、発狂が蓄積": "gestureCrossedLegsBuildsUpMadness",
+  "周囲で凍傷状態の発生時、自身の姿を隠す": "nearbyFrostbiteConcealsSelf",
+  "自身と味方の取得ルーン増加": "increasedRuneAcquisitionForSelfAndAllies",
+  "自身を除く、周囲の味方のスタミナ回復速度上昇":
+    "raisedStaminaRecoveryForNearbyAlliesButNotForSelf",
+  "アイテムの効果が周囲の味方にも発動": "itemsConferEffectToAllNearbyAllies",
+  "【追跡者】アビリティ発動時、アーツゲージ増加": "wylderArtGaugeGreatlyFilledWhenAbilityActivated",
+  "【守護者】アーツ発動時、周囲の味方HPを徐々に回復": "guardianSlowlyRestoresNearbyAlliesHP",
+  "【守護者】斧槍タメ攻撃時、つむじ風が発生": "guardianCreatesWhirlwindWhenChargingHalberd",
+  "【鉄の目】アーツ発動後、刺突カウンター強化": "ironeyeBoostsThrustingCounterattacksAfterArt",
+  "【鉄の目】弱点の持続時間を延長させる": "ironeyeExtendsDurationOfWeakPoint",
+  "【レディ】アーツ発動中、敵撃破で攻撃力上昇": "duchessDefeatingEnemiesWhileArtActiveUpsAttack",
+  "【レディ】短剣による攻撃連続時、周囲の敵に、直近の出来事を再演":
+    "duchessDaggerChainAttackReprises",
+  "【無頼漢】スキル中に攻撃を受けると攻撃力と最大スタミナ上昇":
+    "raiderDamageTakenWhileUsingCharacterSkillImprovesAttack",
+  "【無頼漢】アーツの効果時間延長": "raiderDurationOfUltimateArtExtended",
+  "トーテム・ステラの周囲で敵を倒した時、HP回復": "defeatingEnemiesNearTotemStelaRestoresHP",
+  "【復讐者】アーツ発動時、霊炎の爆発を発生":
+    "revenantTriggerGhostflameExplosionDuringUltimateArtActivation",
+  "【復讐者】アーツ発動時、自身のHPと引き換えに周囲の味方のHPを全回復":
+    "revenantExpendOwnHPToFullyHealNearbyAllies",
+  "【復讐者】アーツ発動時、ファミリーと味方を強化":
+    "revenantStrengthensFamilyAndAlliesWhenUltimateArtActivated",
+  "【復讐者】ファミリーと共闘中の間、自身を強化": "revenantPowerUpWhileFightingAlongsideFamily",
+  "【陰者】アーツ発動時、自身が出血状態になり、攻撃力上昇":
+    "recluseSufferBloodLossAndIncreaseAttackPower",
+  "【陰者】アーツ発動時、最大HP上昇": "recluseActivatingUltimateArtRaisesMaxHP",
+  "【陰者】属性痕を集めた時、「魔術の地」が発動": "recluseCollectingAffinityResidueActivatesTerraMagica",
+  "【執行者】スキル中の攻撃力上昇、攻撃時にカット率低下":
+    "executorCharacterSkillBoostsAttackButDrainsHP",
+  "【執行者】アビリティ発動時、HPをゆっくりと回復": "executorSlowlyRestoreHPUponAbilityActivation",
+  "【学者】スキルの進捗率の低下を抑制": "scholarPreventSlowingOfCharacterSkillProgress",
+  "【学者】スキル使用時、対象に含まれた味方の攻撃力上昇":
+    "scholarAlliesTargetedByCharacterSkillGainBoostedAttack",
+  "【学者】スキルによる標本が増える度、ルーンを取得":
+    "scholarEarnRunesForEachAdditionalSpecimenAcquiredWithCharacterSkill",
+  "【学者】アーツでリンクした敵対象に、継続ダメージ":
+    "scholarContinuousDamageInflictedOnTargetsThreadedByUltimateArt",
+  "【学者】スキルを自身に使用時、FP消費軽減": "scholarReducedFpConsumptionWhenUsingCharacterSkillOnSelf",
+  "【葬儀屋】アーツ発動時、攻撃力上昇": "undertakerActivatingUltimateArtIncreasesAttackPower",
+  "【葬儀屋】アーツ発動時、触れた味方のHP回復":
+    "undertakerContactWithAlliesRestoresTheirHpWhileUltimateArtIsActivated",
+  "【葬儀屋】連撃の最終攻撃命中時、攻撃力上昇":
+    "undertakerAttackPowerIncreasedByLandingTheFinalBlowOfAChainAttack",
+  "【葬儀屋】祈祷を使用して、自身に補助効果発生時物理攻撃力上昇":
+    "undertakerPhysicalAttacksBoostedWhileAssistEffectFromIncantationIsActiveForSelf",
 };
 
 // These three matching primitives are intentionally local to this script

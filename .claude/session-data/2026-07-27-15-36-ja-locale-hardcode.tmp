@@ -1,0 +1,28 @@
+PROJECT: EldenringNR-Relic (Relic Browser)
+CREATED: 2026-07-27 15:36
+WHAT WE'RE BUILDING: ユーザー環境でRelic Browserが英語表示になる問題の調査・修正。i18n言語を日本語固定にし、effectCategoriesの表記ゆれによる「その他」誤分類を修正。
+
+## 完了・検証済み
+- 当初「damage-ranking-tabのworktreeマージ漏れ」を疑ったが誤り。ユーザーが実際に見ていたのは`npm run dev`（ポート5173、mainブランチ）で、原因はworktreeとは無関係。damage-ranking-tabへのmainマージ作業は`git merge --abort`で中断済み、未着手のまま放置(必要なら別途対応)。
+- 根本原因1: `src/i18n.ts`が`i18next-browser-languagedetector`でブラウザのnavigator言語を自動検出する設定になっており、言語切り替えUIも存在しないため、ブラウザ/OSの言語設定次第で英語表示になっていた。ユーザーの要望により検出をやめ`lng: "ja"`にハードコード。`i18next-browser-languagedetector`のimportとdetection設定を削除(commit未作成、作業ツリーに変更あり)。
+- 根本原因2: `src/resources/effectCategories.ts`(scripts/generate-effect-categories.mjsが生成)で、RelicHubの`skills.json`の`eng`表記とi18n.tsの英語表記が大文字小文字・時制・句読点で食い違うと完全一致マッチングに失敗し、正しいカテゴリではなく「その他」に落ちる既知のバグパターン(MANUAL_EFFECT_KEY_OVERRIDESで対応する運用が過去セッションで確立済み)。ユーザー指摘の「【追跡者】スキルの使用回数+1」を含め、スクリプト実行時の「could not be matched」警告40件全部を1件ずつi18n.tsと照合し、全て実在するEffectKeyへの表記ゆれと確認、MANUAL_EFFECT_KEY_OVERRIDESに40件追加してscripts/generate-effect-categories.mjsを再生成。未マッチ警告は40件→0件。テスト(effectCategories.test.ts)はpass。
+- 残る358件の「その他」分類は、skills.json(494エントリ)に対応する項目自体が存在しないため(表記ゆれではなく、そもそも分類ソース対象外)、正常な状態と判断。
+
+## 試して失敗
+- damage-ranking-tabブランチへの`git merge main`を実行したところ8ファイルでコンフリクト発生(scripts/damage-multiplier-matching.mjs等、add/add)。ユーザーから「damage-ranking-tabは却下済み」と指摘され`git merge --abort`で中断。このブランチ/worktreeを今後どう扱うかは未確認。
+- HomePage.tsx(トップページのハードコード英語文言)を問題箇所と誤認し調査したが、ユーザーから「そこは不要、fork元の部分」「問題はRelic BrowserのEffect表示」と訂正された。
+
+## 次にやること
+- `src/i18n.ts`の`lng: "ja"`ハードコード変更と`effectCategories.ts`/`generate-effect-categories.mjs`の修正はまだコミットされていない(作業ツリー上の変更のみ)。ユーザー確認の上コミットが必要。
+- damage-ranking-tabのworktree/ブランチ(`.worktrees/damage-ranking-tab`)を却下済み扱いとして削除するかどうか、ユーザーに確認が必要。
+- バックグラウンドで起動した検証用devサーバー(ポート5175)が残っている可能性があるため、不要なら停止すること。
+- effectCategoriesの358件「その他」は今回スコープ外(表記ゆれではなく未収録)と判断したが、ユーザーが個別に気になる効果があれば都度同じ手法(skills.jsonのeng/jpn照合)で調査可能。
+
+## 参照パス
+- src/i18n.ts (言語検出設定、行2595付近)
+- scripts/generate-effect-categories.mjs (MANUAL_EFFECT_KEY_OVERRIDES、今回40件追加)
+- src/resources/effectCategories.ts (生成ファイル、直接編集禁止)
+- RelicHub/data/skills.json (分類ソース、jpn/eng表記)
+- docs/superpowers/specs/2026-07-26-relic-browser-japanese-localization-design.md
+- .claude/session-data/2026-07-26-17-32-relic-search-filter.tmp (MANUAL_EFFECT_KEY_OVERRIDESパターンの由来)
+- .claude/session-data/2026-07-26-03-51-damage-optimizer.tmp (同パターンの過去の適用実績、陰者/隠者typo等)
