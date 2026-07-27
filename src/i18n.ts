@@ -40,9 +40,9 @@ const resources = {
       showingMatchingRelicsTemplate:
         "Showing {{normal}} matching relics and {{deep}} matching deep relics out of {{total}} on character {{character}}",
 
-      sellCandidatesTitle: "Sell candidates ({{count}})",
-      sellCandidatesSelectAll: "Select all",
-      sellCandidatesSelectNone: "Select none",
+      sellCandidatesTitle: "{{count}} selected - click any relic to add or remove it",
+      sellCandidatesSelectAll: "Select all shown",
+      sellCandidatesSelectNone: "Clear selection",
 
       deleteSelectedButton: "Delete selected and download save file",
       deleteConfirmTitle: "Confirm relic deletion",

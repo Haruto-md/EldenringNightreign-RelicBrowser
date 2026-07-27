@@ -18,7 +18,11 @@ interface AdvancedSearchPanelProps {
 
 function countActiveFilters(filter: EffectFilterState): number {
   const groupEntries = filter.groups.reduce((sum, g) => sum + g.entries.length, 0);
-  return groupEntries + filter.excluded.length;
+  const excludedEntries = filter.excludedGroups.reduce(
+    (sum, g) => sum + g.entries.length,
+    0
+  );
+  return groupEntries + excludedEntries;
 }
 
 export function AdvancedSearchPanel({
@@ -27,14 +31,15 @@ export function AdvancedSearchPanel({
   onEffectFilterChange,
 }: AdvancedSearchPanelProps) {
   const { t } = useTranslation();
-  const updateGroup = (groupId: string, updater: (group: EffectFilterGroup) => EffectFilterGroup) => {
-    onEffectFilterChange({
-      ...effectFilter,
-      groups: effectFilter.groups.map((group) =>
-        group.id === groupId ? updater(group) : group
-      ),
-    });
-  };
+
+  const updateGroup = (
+    groups: EffectFilterGroup[],
+    groupId: string,
+    updater: (group: EffectFilterGroup) => EffectFilterGroup
+  ): EffectFilterGroup[] =>
+    groups.map((group) => (group.id === groupId ? updater(group) : group));
+
+  // --- Required groups ---
 
   const addGroup = () => {
     onEffectFilterChange({
@@ -44,23 +49,29 @@ export function AdvancedSearchPanel({
   };
 
   const addEffectToGroup = (groupId: string, effect: Effect) => {
-    updateGroup(groupId, (group) => ({
-      ...group,
-      entries: group.entries.some((e) => e.effect === effect)
-        ? group.entries
-        : [...group.entries, { effect, comparison: "atLeast" }],
-    }));
+    onEffectFilterChange({
+      ...effectFilter,
+      groups: updateGroup(effectFilter.groups, groupId, (group) => ({
+        ...group,
+        entries: group.entries.some((e) => e.effect === effect)
+          ? group.entries
+          : [...group.entries, { effect, comparison: "atLeast" }],
+      })),
+    });
   };
 
   const toggleComparison = (groupId: string, effect: Effect) => {
-    updateGroup(groupId, (group) => ({
-      ...group,
-      entries: group.entries.map((entry) =>
-        entry.effect === effect
-          ? { ...entry, comparison: entry.comparison === "atLeast" ? "atMost" : "atLeast" }
-          : entry
-      ),
-    }));
+    onEffectFilterChange({
+      ...effectFilter,
+      groups: updateGroup(effectFilter.groups, groupId, (group) => ({
+        ...group,
+        entries: group.entries.map((entry) =>
+          entry.effect === effect
+            ? { ...entry, comparison: entry.comparison === "atLeast" ? "atMost" : "atLeast" }
+            : entry
+        ),
+      })),
+    });
   };
 
   const removeEffectFromGroup = (groupId: string, effect: Effect) => {
@@ -73,24 +84,73 @@ export function AdvancedSearchPanel({
         groups: effectFilter.groups.filter((g) => g.id !== groupId),
       });
     } else {
-      updateGroup(groupId, (g) => ({ ...g, entries: remainingEntries }));
+      onEffectFilterChange({
+        ...effectFilter,
+        groups: updateGroup(effectFilter.groups, groupId, (g) => ({
+          ...g,
+          entries: remainingEntries,
+        })),
+      });
     }
   };
 
-  const addExcluded = (effect: Effect) => {
-    if (effectFilter.excluded.includes(effect)) {return;}
-    onEffectFilterChange({ ...effectFilter, excluded: [...effectFilter.excluded, effect] });
-  };
+  // --- Excluded groups (same shape/capability as required groups) ---
 
-  const removeExcluded = (effect: Effect) => {
+  const addExcludedGroup = () => {
     onEffectFilterChange({
       ...effectFilter,
-      excluded: effectFilter.excluded.filter((e) => e !== effect),
+      excludedGroups: [...effectFilter.excludedGroups, createEmptyEffectFilterGroup()],
     });
   };
 
+  const addEffectToExcludedGroup = (groupId: string, effect: Effect) => {
+    onEffectFilterChange({
+      ...effectFilter,
+      excludedGroups: updateGroup(effectFilter.excludedGroups, groupId, (group) => ({
+        ...group,
+        entries: group.entries.some((e) => e.effect === effect)
+          ? group.entries
+          : [...group.entries, { effect, comparison: "atLeast" }],
+      })),
+    });
+  };
+
+  const toggleExcludedComparison = (groupId: string, effect: Effect) => {
+    onEffectFilterChange({
+      ...effectFilter,
+      excludedGroups: updateGroup(effectFilter.excludedGroups, groupId, (group) => ({
+        ...group,
+        entries: group.entries.map((entry) =>
+          entry.effect === effect
+            ? { ...entry, comparison: entry.comparison === "atLeast" ? "atMost" : "atLeast" }
+            : entry
+        ),
+      })),
+    });
+  };
+
+  const removeEffectFromExcludedGroup = (groupId: string, effect: Effect) => {
+    const group = effectFilter.excludedGroups.find((g) => g.id === groupId);
+    if (!group) {return;}
+    const remainingEntries = group.entries.filter((e) => e.effect !== effect);
+    if (remainingEntries.length === 0) {
+      onEffectFilterChange({
+        ...effectFilter,
+        excludedGroups: effectFilter.excludedGroups.filter((g) => g.id !== groupId),
+      });
+    } else {
+      onEffectFilterChange({
+        ...effectFilter,
+        excludedGroups: updateGroup(effectFilter.excludedGroups, groupId, (g) => ({
+          ...g,
+          entries: remainingEntries,
+        })),
+      });
+    }
+  };
+
   const clearAll = () => {
-    onEffectFilterChange({ groups: [], excluded: [] });
+    onEffectFilterChange({ groups: [], excludedGroups: [] });
   };
 
   const activeCount = countActiveFilters(effectFilter);
@@ -142,22 +202,30 @@ export function AdvancedSearchPanel({
       <Typography variant="caption" color="text.secondary">
         {t("excludedGroupHint")}
       </Typography>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
-        {effectFilter.excluded.map((effect) => (
-          <EffectFilterChip
-            key={effect.key}
-            entry={{ effect, comparison: "atLeast" }}
-            onRemove={() => removeExcluded(effect)}
-          />
+      <Stack spacing={1} sx={{ mt: 0.5 }}>
+        {effectFilter.excludedGroups.map((group) => (
+          <Stack key={group.id} direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            {group.entries.map((entry) => (
+              <EffectFilterChip
+                key={entry.effect.key}
+                entry={entry}
+                onToggleComparison={() => toggleExcludedComparison(group.id, entry.effect)}
+                onRemove={() => removeEffectFromExcludedGroup(group.id, entry.effect)}
+              />
+            ))}
+            <EffectsAutocomplete
+              availableEffects={availableEffects}
+              placeholder={t("addExcludedEffectPlaceholder")}
+              onSearchChange={() => {}}
+              onChange={(effect) => addEffectToExcludedGroup(group.id, effect)}
+              clearOnSelect
+              groupByCategory
+            />
+          </Stack>
         ))}
-        <EffectsAutocomplete
-          availableEffects={availableEffects}
-          placeholder={t("addExcludedEffectPlaceholder")}
-          onSearchChange={() => {}}
-          onChange={addExcluded}
-          clearOnSelect
-          groupByCategory
-        />
+        <Button size="small" startIcon={<AddIcon />} onClick={addExcludedGroup} sx={{ alignSelf: "flex-start" }}>
+          {t("addGroupButton")}
+        </Button>
       </Stack>
     </Box>
   );

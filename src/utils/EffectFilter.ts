@@ -18,12 +18,14 @@ export interface EffectFilterGroup {
 }
 
 export interface EffectFilterState {
+  /** Required groups: relic must match every group (AND), each group needs at least one matching entry (OR). */
   groups: EffectFilterGroup[];
-  excluded: Effect[];
+  /** Excluded groups: relic is rejected if it matches any group (OR), each group's entries are OR'd the same way as `groups`. */
+  excludedGroups: EffectFilterGroup[];
 }
 
 export function createEmptyEffectFilterState(): EffectFilterState {
-  return { groups: [], excluded: [] };
+  return { groups: [], excludedGroups: [] };
 }
 
 export function createEmptyEffectFilterGroup(): EffectFilterGroup {
@@ -51,21 +53,26 @@ function entryMatchesEffect(
     : isSameGroupAndEqualOrWorse(entry.effect, relicEffect);
 }
 
+function groupMatches(group: EffectFilterGroup, effects: Effect[]): boolean {
+  return group.entries.some((entry) =>
+    effects.some((relicEffect) => entryMatchesEffect(entry, relicEffect))
+  );
+}
+
 export function doesRelicMatchEffectFilter(
   relic: RelicSlot,
   filter: EffectFilterState
 ): boolean {
   const effects = relicEffects(relic);
 
-  if (filter.excluded.some((excludedEffect) => effects.includes(excludedEffect))) {
+  const isExcluded = filter.excludedGroups
+    .filter((group) => group.entries.length > 0)
+    .some((group) => groupMatches(group, effects));
+  if (isExcluded) {
     return false;
   }
 
   return filter.groups
     .filter((group) => group.entries.length > 0)
-    .every((group) =>
-      group.entries.some((entry) =>
-        effects.some((relicEffect) => entryMatchesEffect(entry, relicEffect))
-      )
-    );
+    .every((group) => groupMatches(group, effects));
 }

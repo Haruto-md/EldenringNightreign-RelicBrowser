@@ -45,7 +45,7 @@ describe("doesRelicMatchEffectFilter", () => {
           ],
         },
       ],
-      excluded: [],
+      excludedGroups: [],
     };
     expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
   });
@@ -57,7 +57,7 @@ describe("doesRelicMatchEffectFilter", () => {
         { id: "g1", entries: [{ effect: arcanePlus1, comparison: "atLeast" }] },
         { id: "g2", entries: [{ effect: endurancePlus1, comparison: "atLeast" }] },
       ],
-      excluded: [],
+      excludedGroups: [],
     };
     expect(doesRelicMatchEffectFilter(relic, filter)).toBe(false);
   });
@@ -67,7 +67,7 @@ describe("doesRelicMatchEffectFilter", () => {
     expect(relic.effects[0][0]).toBe(endurancePlus3); // getEffect returns the shared singleton instance
     const filter: EffectFilterState = {
       groups: [{ id: "g1", entries: [{ effect: endurancePlus2, comparison: "atLeast" }] }],
-      excluded: [],
+      excludedGroups: [],
     };
     expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
   });
@@ -77,7 +77,7 @@ describe("doesRelicMatchEffectFilter", () => {
     const highRelic = makeRelic([7000202]); // endurance +3
     const filter: EffectFilterState = {
       groups: [{ id: "g1", entries: [{ effect: endurancePlus2, comparison: "atMost" }] }],
-      excluded: [],
+      excludedGroups: [],
     };
     expect(doesRelicMatchEffectFilter(lowRelic, filter)).toBe(true);
     expect(doesRelicMatchEffectFilter(highRelic, filter)).toBe(false);
@@ -89,7 +89,7 @@ describe("doesRelicMatchEffectFilter", () => {
     relic.effects = [[uniqueEffect]];
     const filter: EffectFilterState = {
       groups: [{ id: "g1", entries: [{ effect: uniqueEffect, comparison: "atMost" }] }],
-      excluded: [],
+      excludedGroups: [],
     };
     expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
 
@@ -97,31 +97,99 @@ describe("doesRelicMatchEffectFilter", () => {
     expect(doesRelicMatchEffectFilter(otherRelic, filter)).toBe(false);
   });
 
-  it("drops a relic that has an excluded effect", () => {
-    const relic = makeRelic([7000200], 7000700); // endurance+1 with arcane+1 as debuff slot
-    const filter: EffectFilterState = {
-      groups: [],
-      excluded: [arcanePlus1],
-    };
-    expect(doesRelicMatchEffectFilter(relic, filter)).toBe(false);
-  });
-
-  it("exclusion is exact-match only (does not exclude higher levels)", () => {
-    const relic = makeRelic([7000202]); // endurance +3
-    const filter: EffectFilterState = {
-      groups: [],
-      excluded: [endurancePlus1], // excluding +1 specifically
-    };
-    expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
-  });
-
   it("ignores groups with zero entries", () => {
     const relic = makeRelic([7000200]);
     const filter: EffectFilterState = {
       groups: [createEmptyEffectFilterGroup()],
-      excluded: [],
+      excludedGroups: [],
     };
     expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
+  });
+
+  describe("excludedGroups", () => {
+    it("drops a relic matching any entry in an excluded group (OR within group)", () => {
+      const relic = makeRelic([7000200], 7000700); // endurance+1 with arcane+1 as debuff slot
+      const filter: EffectFilterState = {
+        groups: [],
+        excludedGroups: [
+          {
+            id: "e1",
+            entries: [
+              { effect: arcanePlus1, comparison: "atLeast" },
+              { effect: getEffect(9999999), comparison: "atLeast" }, // some unrelated effect
+            ],
+          },
+        ],
+      };
+      expect(doesRelicMatchEffectFilter(relic, filter)).toBe(false);
+    });
+
+    it("excludes a relic if it matches any one excluded group (OR across groups)", () => {
+      const relic = makeRelic([7000700]); // arcane +1 only
+      const filter: EffectFilterState = {
+        groups: [],
+        excludedGroups: [
+          { id: "e1", entries: [{ effect: endurancePlus1, comparison: "atLeast" }] }, // doesn't match
+          { id: "e2", entries: [{ effect: arcanePlus1, comparison: "atLeast" }] }, // matches
+        ],
+      };
+      expect(doesRelicMatchEffectFilter(relic, filter)).toBe(false);
+    });
+
+    it("does not exclude a relic that matches none of the excluded groups", () => {
+      const relic = makeRelic([7000700]); // arcane +1
+      const filter: EffectFilterState = {
+        groups: [],
+        excludedGroups: [
+          { id: "e1", entries: [{ effect: endurancePlus1, comparison: "atLeast" }] },
+        ],
+      };
+      expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
+    });
+
+    it("exclusion respects atLeast (excludes equal-or-higher levels)", () => {
+      const relic = makeRelic([7000202]); // endurance +3
+      const filter: EffectFilterState = {
+        groups: [],
+        excludedGroups: [
+          { id: "e1", entries: [{ effect: endurancePlus2, comparison: "atLeast" }] },
+        ],
+      };
+      expect(doesRelicMatchEffectFilter(relic, filter)).toBe(false);
+    });
+
+    it("exclusion respects atMost (excludes equal-or-lower levels, not higher)", () => {
+      const lowRelic = makeRelic([7000201]); // endurance +2
+      const highRelic = makeRelic([7000202]); // endurance +3
+      const filter: EffectFilterState = {
+        groups: [],
+        excludedGroups: [
+          { id: "e1", entries: [{ effect: endurancePlus2, comparison: "atMost" }] },
+        ],
+      };
+      expect(doesRelicMatchEffectFilter(lowRelic, filter)).toBe(false);
+      expect(doesRelicMatchEffectFilter(highRelic, filter)).toBe(true);
+    });
+
+    it("ignores excluded groups with zero entries", () => {
+      const relic = makeRelic([7000200]);
+      const filter: EffectFilterState = {
+        groups: [],
+        excludedGroups: [createEmptyEffectFilterGroup()],
+      };
+      expect(doesRelicMatchEffectFilter(relic, filter)).toBe(true);
+    });
+
+    it("required groups still apply once exclusion has already passed", () => {
+      const relic = makeRelic([7000700]); // arcane +1, no endurance
+      const filter: EffectFilterState = {
+        groups: [{ id: "g1", entries: [{ effect: endurancePlus1, comparison: "atLeast" }] }],
+        excludedGroups: [
+          { id: "e1", entries: [{ effect: getEffect(9999999), comparison: "atLeast" }] },
+        ],
+      };
+      expect(doesRelicMatchEffectFilter(relic, filter)).toBe(false);
+    });
   });
 });
 

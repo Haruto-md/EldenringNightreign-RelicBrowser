@@ -1,3 +1,5 @@
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import {
   Box,
   Card,
@@ -29,6 +31,15 @@ interface RelicCardProps {
   selectedColor: RelicSlotColor;
   highlightedEffects?: Effect[];
   coordinatesByColor: boolean;
+  /**
+   * When true, clicking the card toggles it in/out of the caller's selection
+   * set. `onToggleSelect` takes the relic id (rather than being pre-bound per
+   * card) so the same stable function reference can be passed to every card,
+   * keeping the memo comparator below effective across re-renders.
+   */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (relicId: number) => void;
 }
 
 const getBackgroundColor = (effectsCount: number) => {
@@ -52,6 +63,9 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
   selectedColor,
   highlightedEffects = [],
   coordinatesByColor,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const { itemId, effects } = relic;
@@ -64,8 +78,16 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
   const itemType = items.get(itemId)?.type ?? ItemType.Relic;
   const { t } = useTranslation();
 
-  const handleSellMeClick = () => {
+  const handleSellMeClick = (event: React.MouseEvent) => {
+    // Don't let opening the comparison modal also toggle selection underneath it.
+    event.stopPropagation();
     setModalOpen(true);
+  };
+
+  const handleCardClick = () => {
+    if (selectable) {
+      onToggleSelect?.(relic.id);
+    }
   };
 
   const handleModalClose = () => {
@@ -105,6 +127,8 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
   return (
     <Card
       variant="outlined"
+      onClick={handleCardClick}
+      aria-pressed={selectable ? selected : undefined}
       sx={{
         height: "100%",
         background: `radial-gradient(circle at 100% 100%, ${backgroundColor} 0%, #000000 130%)`,
@@ -112,8 +136,38 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
         overflow: "hidden",
         position: "relative",
         borderRadius: 3,
+        ...(selectable && {
+          cursor: "pointer",
+          borderColor: selected ? "error.main" : "divider",
+          borderWidth: selected ? 2 : 1,
+          opacity: selected ? 1 : 0.55,
+          "&:hover": {
+            opacity: 1,
+            borderColor: selected ? "error.main" : "text.secondary",
+          },
+        }),
       }}
     >
+      {selectable && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 4,
+            left: 4,
+            zIndex: 1,
+            display: "flex",
+            color: selected ? "error.main" : "text.disabled",
+            bgcolor: "rgba(0, 0, 0, 0.6)",
+            borderRadius: "50%",
+          }}
+        >
+          {selected ? (
+            <CheckCircleIcon fontSize="small" />
+          ) : (
+            <RadioButtonUncheckedIcon fontSize="small" />
+          )}
+        </Box>
+      )}
       <CardContent
         sx={{
           "&:last-child": {
@@ -276,7 +330,10 @@ export const RelicCard = React.memo(
       prevProps.relic !== nextProps.relic ||
       prevProps.selectedColor !== nextProps.selectedColor ||
       prevProps.coordinatesByColor !== nextProps.coordinatesByColor ||
-      prevProps.highlightedEffects !== nextProps.highlightedEffects
+      prevProps.highlightedEffects !== nextProps.highlightedEffects ||
+      prevProps.selectable !== nextProps.selectable ||
+      prevProps.selected !== nextProps.selected ||
+      prevProps.onToggleSelect !== nextProps.onToggleSelect
     ) {
       return false;
     }

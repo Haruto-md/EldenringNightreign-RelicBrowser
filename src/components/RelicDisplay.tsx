@@ -17,6 +17,9 @@ interface RelicDisplayProps {
   searchTerm: string;
   colorFilter: ColorFilterOption;
   onMatchCountChange?: (count: number) => void;
+  selectable?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (relicId: number) => void;
 }
 
 export const RelicDisplay: React.FC<RelicDisplayProps> = ({
@@ -24,6 +27,9 @@ export const RelicDisplay: React.FC<RelicDisplayProps> = ({
   searchTerm,
   colorFilter,
   onMatchCountChange,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
 }) => {
   const { t, i18n } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -147,6 +153,9 @@ export const RelicDisplay: React.FC<RelicDisplayProps> = ({
                         coordinatesByColor={
                           colorFilter.color !== RelicSlotColor.Any
                         }
+                        selectable={selectable}
+                        selected={selectedIds?.has(relic.id) ?? false}
+                        onToggleSelect={onToggleSelect}
                       />
                     </Grid>
                   ))}

@@ -9,8 +9,9 @@ import {
   DialogTitle,
   List,
   ListItem,
+  Stack,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import { items, ItemType, unsellableItemIds } from "../resources/items";
@@ -32,7 +33,6 @@ import {
 } from "../utils/EffectFilter";
 import { RelicDisplay } from "./RelicDisplay";
 import { SearchInput } from "./SearchInput";
-import { SellCandidatesPanel } from "./SellCandidatesPanel";
 
 interface RelicBrowserProps {
   availableEffects: Effect[];
@@ -75,11 +75,9 @@ export function RelicBrowser({
 
   const hasEffectFilter =
     effectFilter.groups.some((group) => group.entries.length > 0) ||
-    effectFilter.excluded.length > 0;
+    effectFilter.excludedGroups.some((group) => group.entries.length > 0);
 
-  const [selectedForSale, setSelectedForSale] = useState<
-    CharacterSlot["relics"]
-  >([]);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Once a delete has succeeded, every in-memory entry of this file still
@@ -89,13 +87,37 @@ export function RelicBrowser({
   // unmounting this component or by switching character slot.
   const deleteCompleted = isDeleteLocked(deleteLock);
 
-  // Switching character only clears a stale error message; it must NOT touch
-  // the lock (see above).
+  // Switching character clears the in-progress selection (it's a different
+  // relic list) and any stale error message; it must NOT touch the delete
+  // lock itself (see above).
   useEffect(() => {
+    setSelectedIds(new Set());
     setDeleteError(null);
   }, [currentEntry]);
 
   const canDelete = currentEntry !== undefined && !deleteCompleted;
+  // Cards become click-to-select whenever the sell filter narrows the grid
+  // down to candidates and a delete is actually possible - selection is
+  // whatever you've clicked within however you've filtered (color, search,
+  // advanced effect filter, sell filter), not a separately auto-computed list.
+  const selectionEnabled = filterSell && canDelete;
+
+  const handleToggleSelect = useCallback((relicId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(relicId)) {
+        next.delete(relicId);
+      } else {
+        next.add(relicId);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectedForSale = useMemo(
+    () => currentSlot.relics.filter((relic) => selectedIds.has(relic.id)),
+    [currentSlot.relics, selectedIds]
+  );
 
   const handleConfirmDelete = async () => {
     if (!canDelete || currentEntry === undefined) {
@@ -110,7 +132,7 @@ export function RelicBrowser({
       );
       downloadSaveFile(modified, saveFileName ?? "save.sl2");
       setDeleteError(null);
-      setSelectedForSale([]);
+      setSelectedIds(new Set());
       setConfirmOpen(false);
       markEntryDeleted(currentEntry.index);
     } catch (err) {
@@ -186,6 +208,20 @@ export function RelicBrowser({
     hasEffectFilter,
   ]);
 
+  const selectAllShown = useCallback(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const relic of matchingRelics) {
+        next.add(relic.id);
+      }
+      return next;
+    });
+  }, [matchingRelics]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   return (
     <Box
       component="section"
@@ -223,13 +259,6 @@ export function RelicBrowser({
         // }
       />
 
-      {filterSell && !deleteCompleted && (
-        <SellCandidatesPanel
-          relics={currentSlot.relics}
-          onSelectionChange={setSelectedForSale}
-        />
-      )}
-
       {filterSell && deleteCompleted && (
         <Alert severity="success" sx={{ my: 1 }}>
           <AlertTitle>{t("deleteAlreadyDoneTitle")}</AlertTitle>
@@ -243,7 +272,28 @@ export function RelicBrowser({
         </Alert>
       )}
 
-      {filterSell && canDelete && selectedForSale.length > 0 && (
+      {selectionEnabled && matchingRelics.length > 0 && (
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          sx={{ my: 1 }}
+        >
+          <Alert severity="info" variant="outlined" sx={{ flexGrow: 1, mr: 1 }}>
+            {t("sellCandidatesTitle", { count: selectedForSale.length })}
+          </Alert>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" onClick={selectAllShown}>
+              {t("sellCandidatesSelectAll")}
+            </Button>
+            <Button size="small" onClick={clearSelection}>
+              {t("sellCandidatesSelectNone")}
+            </Button>
+          </Stack>
+        </Stack>
+      )}
+
+      {selectionEnabled && selectedForSale.length > 0 && (
         <Button
           variant="contained"
           onClick={() => {
@@ -297,6 +347,9 @@ export function RelicBrowser({
             searchTerm={searchTerm}
             colorFilter={colorFilter}
             onMatchCountChange={handleMatchingRelicsCountChange}
+            selectable={selectionEnabled}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
           />
         </Box>
       )}
