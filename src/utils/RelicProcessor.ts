@@ -121,6 +121,43 @@ export function findBetterRelic(
   return { relic: betterOrEqualRelic, outclassed };
 }
 
+/**
+ * Two relics that are exactly equivalent (identical effects, identical
+ * demerits) each mark the other as `redundant` with `outclassed: false`.
+ * Left alone, that means *both* copies of a duplicate end up on the sell
+ * list and get auto-selected for deletion - so the user loses the copy they
+ * meant to keep.
+ *
+ * This resolves such mutual ties by keeping exactly one survivor per pair:
+ * the relic with the lower `id` (deterministic, stable across runs) has its
+ * `redundant` mark cleared, the other one keeps it. Only genuine two-way
+ * ties between exactly these two relics are touched; one-directional
+ * "A is outclassed by B" marks and longer chains are left untouched.
+ */
+function resolveMutualTies(relics: RelicSlot[]): void {
+  for (const relic of relics) {
+    const redundant = relic.redundant;
+    if (redundant === undefined || redundant.outclassed) {
+      continue;
+    }
+
+    const other = redundant.relic;
+    const otherRedundant = other.redundant;
+    if (
+      otherRedundant === undefined ||
+      otherRedundant.outclassed ||
+      otherRedundant.relic !== relic
+    ) {
+      continue;
+    }
+
+    // Genuine mutual tie between exactly `relic` and `other`.
+    // Keep the lower id as the survivor.
+    const survivor = relic.id <= other.id ? relic : other;
+    survivor.redundant = undefined;
+  }
+}
+
 export function findOutclassedRelics(relics: RelicSlot[]): void {
   const normalRelics = relics.filter(
     ({ itemId }) => items.get(itemId)?.type !== ItemType.DeepRelic
@@ -135,6 +172,7 @@ export function findOutclassedRelics(relics: RelicSlot[]): void {
       relic.redundant = redundant;
     }
   }
+  resolveMutualTies(normalRelics);
 
   const deepRelics = relics.filter(
     ({ itemId }) => items.get(itemId)?.type === ItemType.DeepRelic
@@ -149,4 +187,5 @@ export function findOutclassedRelics(relics: RelicSlot[]): void {
       relic.redundant = redundant;
     }
   }
+  resolveMutualTies(deepRelics);
 }
