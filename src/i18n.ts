@@ -18,6 +18,13 @@ const resources = {
       sellCandidatesSelectAll: "Select all",
       sellCandidatesSelectNone: "Select none",
 
+      deleteSelectedButton: "Delete selected and download save file",
+      deleteConfirmTitle: "Confirm relic deletion",
+      deleteConfirmBody:
+        "The following {{count}} relics will be permanently removed from the downloaded save file. This does not modify your original save file.",
+      deleteConfirmCancel: "Cancel",
+      deleteConfirmProceed: "Delete and download",
+
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",
         [Nightfarer.Guardian]: "Guardian",

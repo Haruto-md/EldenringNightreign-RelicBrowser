@@ -1,14 +1,27 @@
-import { Box, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  List,
+  ListItem,
+  Typography,
+} from "@mui/material";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import { items, ItemType, unsellableItemIds } from "../resources/items";
-import type { CharacterSlot } from "../types/SaveFile";
+import type { BND4Entry, CharacterSlot } from "../types/SaveFile";
 import {
   colorFilterOptions,
   type ColorFilterOption,
 } from "../utils/ColorFilterOptions";
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
+import { buildDeletionPlan, downloadSaveFile } from "../utils/DownloadSaveFile";
 import { RelicSlotColor } from "../utils/RelicColor";
+import { SaveFileEncryptor } from "../utils/SaveFileEncryptor";
 import { doesRelicColorMatch, doesRelicMatch } from "../utils/SearchUtils";
 import { RelicDisplay } from "./RelicDisplay";
 import { SearchInput } from "./SearchInput";
@@ -20,6 +33,8 @@ interface RelicBrowserProps {
   searchTerm: string;
   setSearchTerm: (searchTerm: string) => void;
   handleMatchingRelicsCountChange: (count: number) => void;
+  currentEntry?: BND4Entry;
+  saveFileName?: string;
 }
 
 export function RelicBrowser({
@@ -28,17 +43,29 @@ export function RelicBrowser({
   searchTerm,
   setSearchTerm,
   handleMatchingRelicsCountChange,
+  currentEntry,
+  saveFileName,
 }: RelicBrowserProps) {
+  const { t } = useTranslation();
   const [filterSell, setFilterSell] = useState(false);
   const [colorFilter, setColorFilter] = useState<ColorFilterOption>(
     colorFilterOptions[0]
   );
-  // Not consumed yet — Task 5 wires this into the delete/download flow.
-  // @ts-expect-error TS6133: selectedForSale is a placeholder for Task 5
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedForSale, setSelectedForSale] = useState<
     CharacterSlot["relics"]
   >([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!currentEntry) {
+      return;
+    }
+    const plan = buildDeletionPlan(selectedForSale, currentEntry);
+    const modified = await SaveFileEncryptor.writeRelicDeletions(plan);
+    downloadSaveFile(currentEntry.rawData, `${saveFileName ?? "save"}.backup.sl2`);
+    downloadSaveFile(modified, saveFileName ?? "save.sl2");
+    setConfirmOpen(false);
+  };
 
   const matchingRelics = useMemo(() => {
     if (
@@ -136,6 +163,35 @@ export function RelicBrowser({
           onSelectionChange={setSelectedForSale}
         />
       )}
+
+      {filterSell && selectedForSale.length > 0 && (
+        <Button variant="contained" onClick={() => setConfirmOpen(true)}>
+          {t("deleteSelectedButton")}
+        </Button>
+      )}
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogTitle>{t("deleteConfirmTitle")}</DialogTitle>
+        <DialogContent>
+          <p>{t("deleteConfirmBody", { count: selectedForSale.length })}</p>
+          <List>
+            {selectedForSale.map((relic) => (
+              <ListItem key={relic.id}>
+                {getItemName(relic.itemId)} ({relic.coordinates[0]},{" "}
+                {relic.coordinates[1]})
+              </ListItem>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>
+            {t("deleteConfirmCancel")}
+          </Button>
+          <Button variant="contained" onClick={handleConfirmDelete}>
+            {t("deleteConfirmProceed")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Typography variant="subtitle2" textAlign="center" gutterBottom>
         {currentSlot.relics.length === matchingRelics.length

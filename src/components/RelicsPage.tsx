@@ -122,6 +122,8 @@ export function RelicsPage({
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           handleMatchingRelicsCountChange={handleMatchingRelicsCountChange}
+          currentEntry={saveFileData.bnd4Entries?.[saveFileData.currentSlot]}
+          saveFileName={saveFileData.filePath}
         />
       )}
       {tab === TabIndex.ComboFinder && (
