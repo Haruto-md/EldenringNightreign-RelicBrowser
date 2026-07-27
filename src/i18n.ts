@@ -24,6 +24,8 @@ const resources = {
         "The following {{count}} relics will be permanently removed from the downloaded save file. This does not modify your original save file.",
       deleteConfirmCancel: "Cancel",
       deleteConfirmProceed: "Delete and download",
+      deleteConfirmError:
+        "Something went wrong while deleting the selected relics. Your original save file was not modified.",
 
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",

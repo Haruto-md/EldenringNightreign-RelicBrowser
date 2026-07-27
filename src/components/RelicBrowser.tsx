@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Dialog,
@@ -55,16 +56,28 @@ export function RelicBrowser({
     CharacterSlot["relics"]
   >([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleConfirmDelete = async () => {
     if (!currentEntry) {
       return;
     }
-    const plan = buildDeletionPlan(selectedForSale, currentEntry);
-    const modified = await SaveFileEncryptor.writeRelicDeletions(plan);
-    downloadSaveFile(currentEntry.rawData, `${saveFileName ?? "save"}.backup.sl2`);
-    downloadSaveFile(modified, saveFileName ?? "save.sl2");
-    setConfirmOpen(false);
+    try {
+      const plan = buildDeletionPlan(selectedForSale, currentEntry);
+      const modified = await SaveFileEncryptor.writeRelicDeletions(plan);
+      downloadSaveFile(
+        currentEntry.rawData,
+        `${saveFileName ?? "save"}.backup.sl2`
+      );
+      downloadSaveFile(modified, saveFileName ?? "save.sl2");
+      setDeleteError(null);
+      setSelectedForSale([]);
+      setConfirmOpen(false);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : t("deleteConfirmError")
+      );
+    }
   };
 
   const matchingRelics = useMemo(() => {
@@ -165,7 +178,13 @@ export function RelicBrowser({
       )}
 
       {filterSell && selectedForSale.length > 0 && (
-        <Button variant="contained" onClick={() => setConfirmOpen(true)}>
+        <Button
+          variant="contained"
+          onClick={() => {
+            setDeleteError(null);
+            setConfirmOpen(true);
+          }}
+        >
           {t("deleteSelectedButton")}
         </Button>
       )}
@@ -182,6 +201,11 @@ export function RelicBrowser({
               </ListItem>
             ))}
           </List>
+          {deleteError !== null && (
+            <Alert severity="error" sx={{ mt: 2 }} role="alert">
+              {deleteError}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmOpen(false)}>
