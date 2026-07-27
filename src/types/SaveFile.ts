@@ -25,6 +25,8 @@ export interface RelicSlot {
   sortKey?: number;
   idBytes?: Uint8Array;
   redundant?: { relic: RelicSlot; outclassed: boolean };
+  byteOffset?: number;
+  slotSize?: number;
 }
 
 export type CompactRelicSlot =
@@ -44,6 +46,14 @@ export interface EffectData {
 export interface CharacterSlot {
   name: string | null;
   relics: RelicSlot[];
+  /**
+   * The BND4 entry this slot was parsed out of. Attached directly to the slot
+   * so nothing has to rely on `SaveFileData.slots` and
+   * `SaveFileData.bnd4Entries` staying index-aligned (they can diverge when
+   * an entry fails to parse). Absent for demo data, which has no save file
+   * behind it.
+   */
+  entry?: BND4Entry;
 }
 
 export interface CompactCharacterSlot {

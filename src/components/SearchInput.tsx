@@ -21,7 +21,7 @@ interface SearchInputProps {
   onFilterSellChange: Dispatch<SetStateAction<boolean>>;
   effectFilter: EffectFilterState;
   onEffectFilterChange: (filter: EffectFilterState) => void;
-  countText: string;
+  countText?: string;
 }
 
 export const SearchInput: React.FC<SearchInputProps> = ({

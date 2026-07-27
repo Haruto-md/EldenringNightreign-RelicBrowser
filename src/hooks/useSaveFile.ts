@@ -1,5 +1,10 @@
 import { useCallback, useState } from "react";
 import type { CharacterSlot, SaveFileData } from "../types/SaveFile";
+import {
+  emptyDeleteLock,
+  recordDelete,
+  type DeleteLockState,
+} from "../utils/DeleteLock";
 import { RelicParser } from "../utils/RelicParser";
 import { findOutclassedRelics } from "../utils/RelicProcessor";
 import { SaveFileDecryptor } from "../utils/SaveFileDecryptor";
@@ -10,11 +15,22 @@ export const useSaveFile = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [matchingRelicsCount, setMatchingRelicsCount] = useState<number>(0);
+  // Scoped to the loaded save file, not to any component or character slot:
+  // it must survive tab switches (which unmount RelicBrowser) and slot
+  // switches, and reset only when a new file is loaded or the file is cleared.
+  const [deleteLock, setDeleteLock] =
+    useState<DeleteLockState>(emptyDeleteLock);
+
+  const markEntryDeleted = useCallback((entryIndex: number) => {
+    setDeleteLock((prev) => recordDelete(prev, entryIndex));
+  }, []);
 
   // Load and parse save file
   const loadSaveFile = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
+    // A genuinely new file means fresh, non-stale in-memory bytes.
+    setDeleteLock(emptyDeleteLock);
 
     try {
       const fileBuffer = await file.arrayBuffer();
@@ -28,20 +44,14 @@ export const useSaveFile = () => {
         console.warn(`Expected 14 BND4 entries, found ${bnd4Entries.length}`);
       }
 
-      // Parse all character slots (1-10)
-      const slots: CharacterSlot[] = [];
-      const names = RelicParser.getNames(bnd4Entries[10]);
-      for (let i = 0; i < names.length; i++) {
-        try {
-          const slotData = RelicParser.parseCharacterSlot(
-            names[i],
-            bnd4Entries[i]
-          );
-          findOutclassedRelics(slotData.relics);
-          slots.push(slotData);
-        } catch (err) {
-          console.error(`Error parsing slot ${i}:`, err);
-        }
+      // Parse all character slots (1-10). Each slot carries the BND4 entry it
+      // came from, so nothing downstream has to assume slots and bnd4Entries
+      // line up by index.
+      const slots: CharacterSlot[] = RelicParser.parseCharacterSlots(
+        bnd4Entries
+      );
+      for (const slot of slots) {
+        findOutclassedRelics(slot.relics);
       }
 
       const saveData: SaveFileData = {
@@ -91,9 +101,12 @@ export const useSaveFile = () => {
     setSearchTerm("");
     setMatchingRelicsCount(0);
     setError(null);
+    setDeleteLock(emptyDeleteLock);
   }, []);
 
   return {
+    deleteLock,
+    markEntryDeleted,
     saveFileData,
     loading,
     error,

@@ -132,6 +132,50 @@ describe("Save File Processing", () => {
         expect(firstRelic.effects.length).toBeGreaterThan(0);
       });
 
+      it("should record each relic's absolute byte offset and slot size", () => {
+        const names = RelicParser.getNames(bnd4Entries[10]);
+        const slot = RelicParser.parseCharacterSlot(names[0], bnd4Entries[0]);
+        if (slot.relics.length === 0) {
+          return;
+        }
+        for (const relic of slot.relics) {
+          expect(relic.byteOffset).toBeTypeOf("number");
+          expect(relic.slotSize).toBe(80);
+          // The slot's id bytes (first 4 bytes of the slot) must be readable
+          // back out of cleanData at byteOffset.
+          const idAtOffset = bnd4Entries[0].cleanData
+            .slice(relic.byteOffset!, relic.byteOffset! + 4)
+            .reduce((acc, byte, i) => acc | (byte << (8 * i)), 0) >>> 0;
+          expect(idAtOffset).toBe(relic.id);
+        }
+      });
+
+      it("should attach to each parsed slot the exact BND4 entry it was parsed from", () => {
+        const slots = RelicParser.parseCharacterSlots(bnd4Entries);
+        expect(slots.length).toBe(testEntry.slots.length);
+
+        for (const slot of slots) {
+          expect(slot.entry).toBeDefined();
+          // The attached entry must be one of the real decrypted entries...
+          expect(bnd4Entries).toContain(slot.entry!);
+
+          // ...and specifically the one whose cleanData actually holds this
+          // slot's relics at their recorded offsets. That is what makes it
+          // "the entry that produced this slot" rather than just some entry.
+          for (const relic of slot.relics) {
+            const idAtOffset =
+              slot.entry!.cleanData
+                .slice(relic.byteOffset!, relic.byteOffset! + 4)
+                .reduce((acc, byte, i) => acc | (byte << (8 * i)), 0) >>> 0;
+            expect(idAtOffset).toBe(relic.id);
+          }
+        }
+
+        // Distinct slots must not share an entry.
+        const entryIndexes = slots.map((slot) => slot.entry!.index);
+        expect(new Set(entryIndexes).size).toBe(entryIndexes.length);
+      });
+
       it("should handle UTF-16LE character names correctly", () => {
         const names = RelicParser.getNames(bnd4Entries[10]);
         expect(names).toHaveLength(testEntry.slots.length);

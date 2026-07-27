@@ -1,6 +1,7 @@
 import { items, ItemType } from "../resources/items";
 import type {
   BND4Entry,
+  CharacterSlot,
   EffectWithOptionalDebuff,
   RelicSlot,
 } from "../types/SaveFile";
@@ -148,7 +149,7 @@ export class RelicParser {
             if (b4 === 0xc0) {
               const slotData = currentEntryOffset.slice(i, i + slotSize);
               const idBytes = slotData.slice(0, 4);
-              const id = this.readIntLE(idBytes);
+              const id = this.readIntLE(idBytes) >>> 0;
 
               // Extract item ID (bytes 4-6)
               const itemIdBytes = slotData.slice(4, 7);
@@ -189,6 +190,8 @@ export class RelicParser {
                 // coordinates will be set later
                 coordinates: [0, 0],
                 coordinatesByColor: [0, 0],
+                byteOffset: patternOffsetStart + i,
+                slotSize,
               };
               foundSlots.push(slotInfo);
             }
@@ -362,6 +365,35 @@ export class RelicParser {
     }
 
     return names;
+  }
+
+  /**
+   * Parses every character slot in a decrypted save file, attaching the BND4
+   * entry each slot was parsed out of directly to the slot.
+   *
+   * Slots whose entry fails to parse are skipped, so the returned array can
+   * be shorter than `bnd4Entries` - which is exactly why the owning entry
+   * travels with the slot instead of being looked up by array position.
+   */
+  public static parseCharacterSlots(bnd4Entries: BND4Entry[]): CharacterSlot[] {
+    const slots: CharacterSlot[] = [];
+    const names = this.getNames(bnd4Entries[10]);
+
+    for (let i = 0; i < names.length; i++) {
+      const entry = bnd4Entries[i];
+      if (entry === undefined) {
+        console.error(`No BND4 entry for character slot ${i}, skipping`);
+        continue;
+      }
+      try {
+        const parsed = this.parseCharacterSlot(names[i], entry);
+        slots.push({ ...parsed, entry });
+      } catch (err) {
+        console.error(`Error parsing slot ${i}:`, err);
+      }
+    }
+
+    return slots;
   }
 
   /**
