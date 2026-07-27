@@ -63,7 +63,12 @@ export function SellCandidatesPanel({
                 onChange={() => setSelected((prev) => toggleSelection(prev, relic.id))}
               />
             }
-            label={getItemName(relic.itemId)}
+            // Coordinates disambiguate duplicates, which would otherwise be
+            // an indistinguishable run of identical item names. Matches the
+            // "(row, column)" format used by the confirm dialog.
+            label={`${getItemName(relic.itemId)} (${relic.coordinates[0]}, ${
+              relic.coordinates[1]
+            })`}
           />
         ))}
       </Stack>

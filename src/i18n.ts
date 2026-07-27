@@ -22,10 +22,17 @@ const resources = {
       deleteConfirmTitle: "Confirm relic deletion",
       deleteConfirmBody:
         "The following {{count}} relics will be permanently removed from the downloaded save file. This does not modify your original save file.",
+      deleteConfirmDownloadWarning:
+        "Two files will be downloaded: a backup of your original save file and the modified save file. Your browser may ask for permission to download multiple files - allow it, and keep both files. If you only keep one, keep the backup.",
       deleteConfirmCancel: "Cancel",
       deleteConfirmProceed: "Delete and download",
       deleteConfirmError:
         "Something went wrong while deleting the selected relics. Your original save file was not modified.",
+      deleteUnavailableNoSaveFile:
+        "Deleting relics is only available for a loaded save file. Demo data cannot be modified.",
+      deleteAlreadyDoneTitle: "Save file downloaded",
+      deleteAlreadyDoneBody:
+        "Your modified save file and its backup have been downloaded. To delete more relics, load the downloaded save file back into this app first - otherwise the deletions you just made would be lost.",
 
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",

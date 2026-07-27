@@ -150,6 +150,32 @@ describe("Save File Processing", () => {
         }
       });
 
+      it("should attach to each parsed slot the exact BND4 entry it was parsed from", () => {
+        const slots = RelicParser.parseCharacterSlots(bnd4Entries);
+        expect(slots.length).toBe(testEntry.slots.length);
+
+        for (const slot of slots) {
+          expect(slot.entry).toBeDefined();
+          // The attached entry must be one of the real decrypted entries...
+          expect(bnd4Entries).toContain(slot.entry!);
+
+          // ...and specifically the one whose cleanData actually holds this
+          // slot's relics at their recorded offsets. That is what makes it
+          // "the entry that produced this slot" rather than just some entry.
+          for (const relic of slot.relics) {
+            const idAtOffset =
+              slot.entry!.cleanData
+                .slice(relic.byteOffset!, relic.byteOffset! + 4)
+                .reduce((acc, byte, i) => acc | (byte << (8 * i)), 0) >>> 0;
+            expect(idAtOffset).toBe(relic.id);
+          }
+        }
+
+        // Distinct slots must not share an entry.
+        const entryIndexes = slots.map((slot) => slot.entry!.index);
+        expect(new Set(entryIndexes).size).toBe(entryIndexes.length);
+      });
+
       it("should handle UTF-16LE character names correctly", () => {
         const names = RelicParser.getNames(bnd4Entries[10]);
         expect(names).toHaveLength(testEntry.slots.length);

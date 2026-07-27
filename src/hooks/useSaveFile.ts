@@ -66,20 +66,14 @@ export const useSaveFile = () => {
         console.warn(`Expected 14 BND4 entries, found ${bnd4Entries.length}`);
       }
 
-      // Parse all character slots (1-10)
-      const slots: CharacterSlot[] = [];
-      const names = RelicParser.getNames(bnd4Entries[10]);
-      for (let i = 0; i < names.length; i++) {
-        try {
-          const slotData = RelicParser.parseCharacterSlot(
-            names[i],
-            bnd4Entries[i]
-          );
-          findOutclassedRelics(slotData.relics);
-          slots.push(slotData);
-        } catch (err) {
-          console.error(`Error parsing slot ${i}:`, err);
-        }
+      // Parse all character slots (1-10). Each slot carries the BND4 entry it
+      // came from, so nothing downstream has to assume slots and bnd4Entries
+      // line up by index.
+      const slots: CharacterSlot[] = RelicParser.parseCharacterSlots(
+        bnd4Entries
+      );
+      for (const slot of slots) {
+        findOutclassedRelics(slot.relics);
       }
 
       const saveData: SaveFileData = {

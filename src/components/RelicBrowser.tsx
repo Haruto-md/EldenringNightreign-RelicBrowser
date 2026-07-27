@@ -1,5 +1,6 @@
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Dialog,
@@ -10,7 +11,7 @@ import {
   ListItem,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import { items, ItemType, unsellableItemIds } from "../resources/items";
@@ -57,9 +58,21 @@ export function RelicBrowser({
   >([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Once a delete has succeeded, the in-memory entry still holds the ORIGINAL
+  // bytes, so a second delete in the same session would silently drop the
+  // first batch's deletions. Lock the flow until a new file is loaded.
+  const [deleteCompleted, setDeleteCompleted] = useState(false);
+
+  // Loading a different save file / character resets the lock.
+  useEffect(() => {
+    setDeleteCompleted(false);
+    setDeleteError(null);
+  }, [currentEntry]);
+
+  const canDelete = currentEntry !== undefined && !deleteCompleted;
 
   const handleConfirmDelete = async () => {
-    if (!currentEntry) {
+    if (!canDelete || currentEntry === undefined) {
       return;
     }
     try {
@@ -73,6 +86,7 @@ export function RelicBrowser({
       setDeleteError(null);
       setSelectedForSale([]);
       setConfirmOpen(false);
+      setDeleteCompleted(true);
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : t("deleteConfirmError")
@@ -170,14 +184,27 @@ export function RelicBrowser({
         onFilterSellChange={setFilterSell}
       />
 
-      {filterSell && (
+      {filterSell && !deleteCompleted && (
         <SellCandidatesPanel
           relics={currentSlot.relics}
           onSelectionChange={setSelectedForSale}
         />
       )}
 
-      {filterSell && selectedForSale.length > 0 && (
+      {filterSell && deleteCompleted && (
+        <Alert severity="success" sx={{ my: 1 }}>
+          <AlertTitle>{t("deleteAlreadyDoneTitle")}</AlertTitle>
+          {t("deleteAlreadyDoneBody")}
+        </Alert>
+      )}
+
+      {filterSell && !deleteCompleted && currentEntry === undefined && (
+        <Alert severity="info" sx={{ my: 1 }}>
+          {t("deleteUnavailableNoSaveFile")}
+        </Alert>
+      )}
+
+      {filterSell && canDelete && selectedForSale.length > 0 && (
         <Button
           variant="contained"
           onClick={() => {
@@ -193,6 +220,9 @@ export function RelicBrowser({
         <DialogTitle>{t("deleteConfirmTitle")}</DialogTitle>
         <DialogContent>
           <p>{t("deleteConfirmBody", { count: selectedForSale.length })}</p>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {t("deleteConfirmDownloadWarning")}
+          </Alert>
           <List>
             {selectedForSale.map((relic) => (
               <ListItem key={relic.id}>
