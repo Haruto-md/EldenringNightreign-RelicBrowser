@@ -33,11 +33,12 @@ export function RelicBrowser({
   const [colorFilter, setColorFilter] = useState<ColorFilterOption>(
     colorFilterOptions[0]
   );
+  // Not consumed yet — Task 5 wires this into the delete/download flow.
+  // @ts-expect-error TS6133: selectedForSale is a placeholder for Task 5
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedForSale, setSelectedForSale] = useState<
     CharacterSlot["relics"]
   >([]);
-  // Not consumed yet — Task 5 wires this into the delete/download flow.
-  void selectedForSale;
 
   const matchingRelics = useMemo(() => {
     if (
