@@ -19,6 +19,11 @@ export function eraseRelicSlot(
   byteOffset: number,
   slotSize: number
 ): Uint8Array {
+  if (slotSize % EMPTY_SLOT_PATTERN.length !== 0) {
+    throw new Error(
+      `eraseRelicSlot: slotSize ${slotSize} must be a multiple of ${EMPTY_SLOT_PATTERN.length} bytes`
+    );
+  }
   const result = new Uint8Array(cleanData);
   for (let offset = 0; offset < slotSize; offset += EMPTY_SLOT_PATTERN.length) {
     result.set(EMPTY_SLOT_PATTERN, byteOffset + offset);
@@ -79,6 +84,9 @@ export class SaveFileEncryptor {
   public static async writeRelicDeletions(
     deletions: RelicDeletion[]
   ): Promise<Uint8Array> {
+    if (deletions.length === 0) {
+      throw new Error("writeRelicDeletions requires at least one deletion");
+    }
     const rawFile = deletions[0].entry.rawData;
     const output = new Uint8Array(rawFile);
 
@@ -99,6 +107,11 @@ export class SaveFileEncryptor {
         newCleanData = eraseRelicSlot(newCleanData, byteOffset, slotSize);
       }
       const newEncryptedData = await this.reEncryptEntry(newCleanData);
+      if (newEncryptedData.length !== entry.size) {
+        throw new Error(
+          `Re-encrypted entry size mismatch: expected ${entry.size} bytes, got ${newEncryptedData.length} bytes. This indicates a critical encryption error.`
+        );
+      }
       output.set(newEncryptedData, entry.dataOffset);
     }
 

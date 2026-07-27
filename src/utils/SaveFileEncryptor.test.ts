@@ -20,9 +20,28 @@ describe("SaveFileEncryptor", () => {
       // Original buffer must not be mutated.
       expect(cleanData.slice(8, 16)).toEqual(new Uint8Array(8).fill(0xaa));
     });
+
+    it("throws if slotSize is not a multiple of EMPTY_SLOT_PATTERN.length", () => {
+      const cleanData = new Uint8Array(24);
+      expect(() => eraseRelicSlot(cleanData, 0, 15)).toThrow(
+        /slotSize 15 must be a multiple of 8 bytes/
+      );
+      expect(() => eraseRelicSlot(cleanData, 0, 7)).toThrow(
+        /slotSize 7 must be a multiple of 8 bytes/
+      );
+      expect(() => eraseRelicSlot(cleanData, 0, 81)).toThrow(
+        /slotSize 81 must be a multiple of 8 bytes/
+      );
+    });
   });
 
   describe("writeRelicDeletions", () => {
+    it("throws if called with an empty deletions array", async () => {
+      await expect(SaveFileEncryptor.writeRelicDeletions([])).rejects.toThrow(
+        /writeRelicDeletions requires at least one deletion/
+      );
+    });
+
     it("deletes exactly the targeted relic and leaves every other relic unchanged", async () => {
       const filePath = path.join(__dirname, "..", "test", "10slots.sl2");
       const fileBuffer = fs.readFileSync(filePath);
