@@ -8,11 +8,6 @@ import { RelicSlotColor } from "./utils/RelicColor";
 const resources = {
   en: {
     translation: {
-      // Home page
-      tryDemo: "Try Demo Data",
-      demo: "Demo",
-      demoDescription: "Load sample relics to explore the interface",
-      features: "Features",
       relicBrowserTab: "Relic Browser",
       character: "Character",
       searchPlaceholder: "Search relics by name or effect...",
@@ -1603,10 +1598,6 @@ const resources = {
 
   ja: {
     translation: {
-      tryDemo: "デモデータを試す",
-      demo: "デモ",
-      demoDescription: "サンプルリリックをロードしてインターフェースを探索",
-      features: "機能",
       relicBrowserTab: "リリックブラウザ",
       character: "キャラクター",
       searchPlaceholder: "リリック名または効果で検索...",
