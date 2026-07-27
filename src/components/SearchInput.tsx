@@ -82,7 +82,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           selected={filterSell}
           onChange={() => onFilterSellChange((prevSelected) => !prevSelected)}
         >
-          <Chip label={t("sellChipLabel")} size="small" />
+          <Chip label={t("outclassedChipLabel")} size="small" />
         </ToggleButton>
 
         <ToggleButton

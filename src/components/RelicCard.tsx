@@ -12,12 +12,7 @@ import {
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { isSameGroupAndEqualOrBetter, type Effect } from "../resources/effects";
-import {
-  items,
-  ItemType,
-  uniqueItemIds,
-  unsellableItemIds,
-} from "../resources/items";
+import { items, ItemType, uniqueItemIds } from "../resources/items";
 import type { RelicSlot } from "../types/SaveFile";
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
 import { getChipColor, type RelicSlotColor } from "../utils/RelicColor";
@@ -212,9 +207,9 @@ const RelicCardComponent: React.FC<RelicCardProps> = ({
           >
             {itemNameHighlight.highlightedText}
           </Typography>
-          {relic.redundant && !unsellableItemIds.includes(relic.itemId) && (
+          {relic.redundant && (
             <Chip
-              label={t("sellChipLabel")}
+              label={t("outclassedChipLabel")}
               size="small"
               sx={{
                 overflow: "clip",

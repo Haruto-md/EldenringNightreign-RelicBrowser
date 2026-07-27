@@ -96,11 +96,13 @@ export function RelicBrowser({
   }, [currentEntry]);
 
   const canDelete = currentEntry !== undefined && !deleteCompleted;
-  // Cards become click-to-select whenever the sell filter narrows the grid
-  // down to candidates and a delete is actually possible - selection is
-  // whatever you've clicked within however you've filtered (color, search,
-  // advanced effect filter, sell filter), not a separately auto-computed list.
-  const selectionEnabled = filterSell && canDelete;
+  // Independent of every filter (color, search, advanced effect filter, and
+  // the redundant/"sell" filter itself): selection mode just makes whatever
+  // is currently shown in the grid clickable. The redundant filter is one way
+  // to narrow down to weak relics, not a requirement for selecting anything -
+  // you can select any relic you can see, filtered however you like.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const selectionEnabled = selectionMode && canDelete;
 
   const handleToggleSelect = useCallback((relicId: number) => {
     setSelectedIds((prev) => {
@@ -259,14 +261,23 @@ export function RelicBrowser({
         // }
       />
 
-      {filterSell && deleteCompleted && (
+      <Button
+        variant={selectionMode ? "contained" : "outlined"}
+        onClick={() => setSelectionMode((prev) => !prev)}
+        disabled={!canDelete}
+        sx={{ alignSelf: "flex-start", my: 1 }}
+      >
+        {selectionMode ? t("selectionModeStop") : t("selectionModeStart")}
+      </Button>
+
+      {selectionMode && deleteCompleted && (
         <Alert severity="success" sx={{ my: 1 }}>
           <AlertTitle>{t("deleteAlreadyDoneTitle")}</AlertTitle>
           {t("deleteAlreadyDoneBody")}
         </Alert>
       )}
 
-      {filterSell && !deleteCompleted && currentEntry === undefined && (
+      {!deleteCompleted && currentEntry === undefined && (
         <Alert severity="info" sx={{ my: 1 }}>
           {t("deleteUnavailableNoSaveFile")}
         </Alert>

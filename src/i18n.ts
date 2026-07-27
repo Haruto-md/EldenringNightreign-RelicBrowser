@@ -10,7 +10,7 @@ const resources = {
       relicBrowserTab: "Relic Browser",
       character: "Character",
       searchPlaceholder: "Search relics by name or effect...",
-      sellChipLabel: "SELL",
+      outclassedChipLabel: "COMPARE",
       noAdvancedFiltersActive: "No advanced filters active",
       filtersActiveCountSingular: "{{count}} filter active",
       filtersActiveCountPlural: "{{count}} filters active",
@@ -39,6 +39,9 @@ const resources = {
         "Showing all {{normal}} relics and {{deep}} deep relics on character {{character}}",
       showingMatchingRelicsTemplate:
         "Showing {{normal}} matching relics and {{deep}} matching deep relics out of {{total}} on character {{character}}",
+
+      selectionModeStart: "Select relics to delete",
+      selectionModeStop: "Stop selecting",
 
       sellCandidatesTitle: "{{count}} selected - click any relic to add or remove it",
       sellCandidatesSelectAll: "Select all shown",
@@ -1620,7 +1623,7 @@ const resources = {
       relicBrowserTab: "リリックブラウザ",
       character: "キャラクター",
       searchPlaceholder: "リリック名または効果で検索...",
-      sellChipLabel: "売却",
+      outclassedChipLabel: "比較",
       noAdvancedFiltersActive: "詳細フィルターは未設定です",
       filtersActiveCountSingular: "{{count}}件のフィルターが有効",
       filtersActiveCountPlural: "{{count}}件のフィルターが有効",
