@@ -10,9 +10,9 @@
 
 ## Global Constraints
 
-- The relic-sell grid is 8 rows × N columns, 1-indexed, cursor starts at `(1, 1)`.
-- Manual arrow keys: `Right`/`Left` move to the adjacent column keeping the same row; `Up`/`Down` move within the current column — **except** pressing `Right` while on row 8 moves to row 1 of the next column instead (there is no row 9).
-- `F` (select) selects the relic under the cursor and auto-advances the cursor exactly as one `Right` press would (including the row-8 wrap above).
+- The relic-sell grid is 8 columns × N rows, 1-indexed, cursor starts at `(1, 1)`. Columns are the bounded axis (1-8, capped — RelicParser.ts: `column = i % 8`); rows are the unbounded axis (can grow arbitrarily large for a big inventory — RelicParser.ts: `row = Math.floor(i / 8)`).
+- Manual arrow keys: `Right`/`Left` move to the adjacent column keeping the same row; `Up`/`Down` move within the current column — **except** pressing `Right` while on column 8 moves to column 1 of the next row instead (there is no column 9).
+- `F` (select) selects the relic under the cursor and auto-advances the cursor exactly as one `Right` press would (including the column-8 wrap above).
 - `3` opens the sell confirmation screen for everything selected so far; the actual final confirmation inside that screen is always done by a human, never automated.
 - `RelicSlot.coordinates` is `[row, column]` and is already produced in increasing (column, row) order by the existing parser — `buildSellKeySequence` must not sort its input.
 - No code in this repo may write to, download, or otherwise produce a modified `.sl2` save file. Selling happens only through the real game UI.

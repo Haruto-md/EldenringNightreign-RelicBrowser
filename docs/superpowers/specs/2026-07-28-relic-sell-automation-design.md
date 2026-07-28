@@ -8,13 +8,13 @@ This design replaces that approach entirely. Instead of writing to the save file
 
 ## In-game relic sell grid — control model
 
-The relic sell screen is an 8-row × N-column grid, cursor starts at (row 1, col 1).
+The relic sell screen is an 8-column × N-row grid, cursor starts at (row 1, col 1). Columns are the bounded axis (1-8 in-game, 0-7 internally); rows are the unbounded axis and can grow arbitrarily large for a big inventory.
 
-- Arrow keys move the cursor normally: Left/Right moves between columns keeping the same row; Up/Down moves within a column. The one non-obvious rule: pressing **Right while on row 8** moves to **row 1 of the next column** (there is no row 9, so it advances into the next column instead of doing nothing).
-- **F** selects the relic under the cursor for sale, and the cursor auto-advances exactly as if Right had been pressed (including the row-8 wrap rule above). Multiple relics can be selected this way before confirming.
+- Arrow keys move the cursor normally: Left/Right moves between columns keeping the same row; Up/Down moves within a column. The one non-obvious rule: pressing **Right while on column 8** moves to **column 1 of the next row** (there is no column 9, so it advances into the next row instead of doing nothing).
+- **F** selects the relic under the cursor for sale, and the cursor auto-advances exactly as if Right had been pressed (including the column-8 wrap rule above). Multiple relics can be selected this way before confirming.
 - **3** opens the sell confirmation screen for everything selected so far.
 
-Relic coordinates already recorded on `RelicSlot.coordinates` (`[row, column]`) come from parsing the save file in the same order the game uses ("Order Found"), so a list of sell candidates is already naturally sorted in increasing (column, row) order — traversal from one candidate to the next never needs to move backward (no Up/Left needed).
+Relic coordinates already recorded on `RelicSlot.coordinates` (`[row, column]`) come from parsing the save file in the same order the game uses ("Order Found"), so a list of sell candidates is already naturally sorted in increasing (row, column) order — traversal from one candidate to the next never needs to move backward (no Up/Left needed) when every relic in a row is selected, though a partial selection within a row can still require a Left backtrack.
 
 ## Scope split
 
