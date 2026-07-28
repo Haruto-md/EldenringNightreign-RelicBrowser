@@ -13,7 +13,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import type { SaveFileData } from "../types/SaveFile";
-import type { DeleteLockState } from "../utils/DeleteLock";
 import { CharacterSlotSelect } from "./CharacterSlotSelect";
 import { DamageOptimizer } from "./DamageOptimizer";
 import { RelicBrowser } from "./RelicBrowser";
@@ -33,12 +32,6 @@ interface RelicsPageProps {
   matchingRelicsCount: number;
   handleMatchingRelicsCountChange: (count: number) => void;
   clearSaveFile: () => void;
-  /**
-   * Delete-lock state owned by `useSaveFile`, so it survives this page's tab
-   * switches (which unmount `RelicBrowser`) and character-slot changes.
-   */
-  deleteLock: DeleteLockState;
-  markEntryDeleted: (entryIndex: number) => void;
 }
 
 export function RelicsPage({
@@ -50,8 +43,6 @@ export function RelicsPage({
   setSearchTerm,
   handleMatchingRelicsCountChange,
   clearSaveFile,
-  deleteLock,
-  markEntryDeleted,
 }: RelicsPageProps) {
   const currentSlot = saveFileData?.slots[saveFileData.currentSlot];
   const navigate = useNavigate();
@@ -164,10 +155,6 @@ export function RelicsPage({
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           handleMatchingRelicsCountChange={handleMatchingRelicsCountChange}
-          currentEntry={currentSlot.entry}
-          saveFileName={saveFileData.filePath}
-          deleteLock={deleteLock}
-          markEntryDeleted={markEntryDeleted}
         />
       )}
       {tab === TabIndex.DamageOptimizer && (

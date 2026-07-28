@@ -1,30 +1,15 @@
-import {
-  Alert,
-  AlertTitle,
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  List,
-  ListItem,
-  Stack,
-} from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Box, Button, Stack } from "@mui/material";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import { items, ItemType, unsellableItemIds } from "../resources/items";
-import type { BND4Entry, CharacterSlot } from "../types/SaveFile";
+import type { CharacterSlot } from "../types/SaveFile";
 import {
   colorFilterOptions,
   type ColorFilterOption,
 } from "../utils/ColorFilterOptions";
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
-import { isDeleteLocked, type DeleteLockState } from "../utils/DeleteLock";
-import { buildDeletionPlan, downloadSaveFile } from "../utils/DownloadSaveFile";
 import { RelicSlotColor } from "../utils/RelicColor";
-import { SaveFileEncryptor } from "../utils/SaveFileEncryptor";
 import { doesRelicColorMatch, doesRelicMatch } from "../utils/SearchUtils";
 import {
   createEmptyEffectFilterState,
@@ -40,17 +25,6 @@ interface RelicBrowserProps {
   searchTerm: string;
   setSearchTerm: (searchTerm: string) => void;
   handleMatchingRelicsCountChange: (count: number) => void;
-  currentEntry?: BND4Entry;
-  saveFileName?: string;
-  /**
-   * Owned by `useSaveFile` so it is scoped to the loaded save file rather than
-   * to this component instance. Keeping it here as local state let a tab
-   * switch (which unmounts this component) or a character-slot change silently
-   * unlock the delete flow, after which the next download was rebuilt from the
-   * untouched original bytes and lost the first delete.
-   */
-  deleteLock: DeleteLockState;
-  markEntryDeleted: (entryIndex: number) => void;
 }
 
 export function RelicBrowser({
@@ -59,10 +33,6 @@ export function RelicBrowser({
   searchTerm,
   setSearchTerm,
   handleMatchingRelicsCountChange,
-  currentEntry,
-  saveFileName,
-  deleteLock,
-  markEntryDeleted,
 }: RelicBrowserProps) {
   const { t } = useTranslation();
   const [filterSell, setFilterSell] = useState(false);
@@ -78,31 +48,12 @@ export function RelicBrowser({
     effectFilter.excludedGroups.some((group) => group.entries.length > 0);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  // Once a delete has succeeded, every in-memory entry of this file still
-  // holds the ORIGINAL bytes (they all share one `rawData` buffer), so any
-  // second delete would silently drop the first batch's deletions. The lock is
-  // held by `useSaveFile`, keyed to the loaded file, so it cannot be reset by
-  // unmounting this component or by switching character slot.
-  const deleteCompleted = isDeleteLocked(deleteLock);
-
-  // Switching character clears the in-progress selection (it's a different
-  // relic list) and any stale error message; it must NOT touch the delete
-  // lock itself (see above).
-  useEffect(() => {
-    setSelectedIds(new Set());
-    setDeleteError(null);
-  }, [currentEntry]);
-
-  const canDelete = currentEntry !== undefined && !deleteCompleted;
   // Independent of every filter (color, search, advanced effect filter, and
   // the redundant/"sell" filter itself): selection mode just makes whatever
   // is currently shown in the grid clickable. The redundant filter is one way
   // to narrow down to weak relics, not a requirement for selecting anything -
   // you can select any relic you can see, filtered however you like.
   const [selectionMode, setSelectionMode] = useState(false);
-  const selectionEnabled = selectionMode && canDelete;
 
   const handleToggleSelect = useCallback((relicId: number) => {
     setSelectedIds((prev) => {
@@ -120,29 +71,6 @@ export function RelicBrowser({
     () => currentSlot.relics.filter((relic) => selectedIds.has(relic.id)),
     [currentSlot.relics, selectedIds]
   );
-
-  const handleConfirmDelete = async () => {
-    if (!canDelete || currentEntry === undefined) {
-      return;
-    }
-    try {
-      const plan = buildDeletionPlan(selectedForSale, currentEntry);
-      const modified = await SaveFileEncryptor.writeRelicDeletions(plan);
-      downloadSaveFile(
-        currentEntry.rawData,
-        `${saveFileName ?? "save"}.backup.sl2`
-      );
-      downloadSaveFile(modified, saveFileName ?? "save.sl2");
-      setDeleteError(null);
-      setSelectedIds(new Set());
-      setConfirmOpen(false);
-      markEntryDeleted(currentEntry.index);
-    } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : t("deleteConfirmError")
-      );
-    }
-  };
 
   const matchingRelics = useMemo(() => {
     if (
@@ -244,46 +172,17 @@ export function RelicBrowser({
         onFilterSellChange={setFilterSell}
         effectFilter={effectFilter}
         onEffectFilterChange={setEffectFilter}
-        // カウントの桁数でUIが変わるのは圧倒的不良UI
-        // countText={
-        //   currentSlot.relics.length === matchingRelics.length
-        //     ? t("showingAllRelicsTemplate", {
-        //         normal: normalRelicsCount,
-        //         deep: deepRelicsCount,
-        //         character: currentSlot.name,
-        //       })
-        //     : t("showingMatchingRelicsTemplate", {
-        //         normal: normalRelicsCount,
-        //         deep: deepRelicsCount,
-        //         total: currentSlot.relics.length,
-        //         character: currentSlot.name,
-        //       })
-        // }
       />
 
       <Button
         variant={selectionMode ? "contained" : "outlined"}
         onClick={() => setSelectionMode((prev) => !prev)}
-        disabled={!canDelete}
         sx={{ alignSelf: "flex-start", my: 1 }}
       >
         {selectionMode ? t("selectionModeStop") : t("selectionModeStart")}
       </Button>
 
-      {selectionMode && deleteCompleted && (
-        <Alert severity="success" sx={{ my: 1 }}>
-          <AlertTitle>{t("deleteAlreadyDoneTitle")}</AlertTitle>
-          {t("deleteAlreadyDoneBody")}
-        </Alert>
-      )}
-
-      {!deleteCompleted && currentEntry === undefined && (
-        <Alert severity="info" sx={{ my: 1 }}>
-          {t("deleteUnavailableNoSaveFile")}
-        </Alert>
-      )}
-
-      {selectionEnabled && matchingRelics.length > 0 && (
+      {selectionMode && matchingRelics.length > 0 && (
         <Stack
           direction="row"
           justifyContent="space-between"
@@ -304,49 +203,6 @@ export function RelicBrowser({
         </Stack>
       )}
 
-      {selectionEnabled && selectedForSale.length > 0 && (
-        <Button
-          variant="contained"
-          onClick={() => {
-            setDeleteError(null);
-            setConfirmOpen(true);
-          }}
-        >
-          {t("deleteSelectedButton")}
-        </Button>
-      )}
-
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>{t("deleteConfirmTitle")}</DialogTitle>
-        <DialogContent>
-          <p>{t("deleteConfirmBody", { count: selectedForSale.length })}</p>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            {t("deleteConfirmDownloadWarning")}
-          </Alert>
-          <List>
-            {selectedForSale.map((relic) => (
-              <ListItem key={relic.id}>
-                {getItemName(relic.itemId)} ({relic.coordinates[0]},{" "}
-                {relic.coordinates[1]})
-              </ListItem>
-            ))}
-          </List>
-          {deleteError !== null && (
-            <Alert severity="error" sx={{ mt: 2 }} role="alert">
-              {deleteError}
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)}>
-            {t("deleteConfirmCancel")}
-          </Button>
-          <Button variant="contained" onClick={handleConfirmDelete}>
-            {t("deleteConfirmProceed")}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {currentSlot && (
         <Box
           sx={{ flexGrow: 1, minHeight: 0 }}
@@ -358,7 +214,7 @@ export function RelicBrowser({
             searchTerm={searchTerm}
             colorFilter={colorFilter}
             onMatchCountChange={handleMatchingRelicsCountChange}
-            selectable={selectionEnabled}
+            selectable={selectionMode}
             selectedIds={selectedIds}
             onToggleSelect={handleToggleSelect}
           />

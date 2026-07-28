@@ -20,8 +20,6 @@ function App() {
     matchingRelicsCount,
     setMatchingRelicsCount,
     clearSaveFile,
-    deleteLock,
-    markEntryDeleted,
   } = useSaveFile();
 
   const handleLoadSaveFile = (file: File) => {
@@ -81,8 +79,6 @@ function App() {
                   matchingRelicsCount={matchingRelicsCount}
                   handleMatchingRelicsCountChange={setMatchingRelicsCount}
                   clearSaveFile={clearSaveFile}
-                  deleteLock={deleteLock}
-                  markEntryDeleted={markEntryDeleted}
                 />
               }
             />
