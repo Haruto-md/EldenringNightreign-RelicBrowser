@@ -72,7 +72,12 @@ export function buildSellKeySequence(candidates: RelicSlot[]): SellAction[] {
   let pos: GridPosition = { row: 1, col: 1 };
 
   for (const candidate of candidates) {
-    const [targetRow, targetCol] = candidate.coordinates;
+    // RelicSlot.coordinates is 0-indexed (see RelicParser.ts: row =
+    // Math.floor(i / 8), column = i % 8), but this function models the
+    // in-game grid as 1-indexed starting at (1,1), so convert here.
+    const [candidateRow, candidateCol] = candidate.coordinates;
+    const targetRow = candidateRow + 1;
+    const targetCol = candidateCol + 1;
     pos = moveTo(pos, targetRow, targetCol, actions);
     actions.push("Select");
     pos = applyRight(pos);

@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 import type { RelicSlot } from "../types/SaveFile";
 import { buildSellKeySequence } from "./SellKeySequence";
 
+// Takes the 1-indexed in-game grid position (row, col) a test case is
+// reasoning about and stores it as the 0-indexed value production code
+// would actually see, mirroring RelicParser.ts's `row = Math.floor(i / 8)`
+// / `column = i % 8` (i.e. RelicSlot.coordinates is 0-indexed).
 function makeCandidate(row: number, col: number): RelicSlot {
   return {
     id: row * 100 + col,
     itemId: 104,
     effects: [],
-    coordinates: [row, col],
-    coordinatesByColor: [row, col],
+    coordinates: [row - 1, col - 1],
+    coordinatesByColor: [row - 1, col - 1],
   };
 }
 
