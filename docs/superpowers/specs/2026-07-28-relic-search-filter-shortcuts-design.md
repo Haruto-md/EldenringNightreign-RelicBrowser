@@ -151,18 +151,42 @@ category scope is active. Selected-chip state is local to each
 it's a browsing aid for the current pick, not a setting worth remembering
 across reloads.
 
-### Within-category level ordering
+### Within-category ordering
 
-The `options` memo's sort currently only orders by category index
-(`orderIndex.get(categoryOf(a)) - orderIndex.get(categoryOf(b))`), leaving
-same-category effects in whatever order `availableEffects` provided them
-(stable sort preserves that as-is). It gains a secondary key: effects that
-share a `group` (the same field `isSameGroupAndEqualOrBetter` already
-keys off) sort by `level` ascending within that group, so "Vigor +1,"
-"Vigor +2," "Vigor +3" appear in that order instead of whatever
-declaration order `effectKeys.ts` happens to use. Effects without a `group`
-(most unique/character effects) keep their existing relative order — there's
-no meaningful "level" to sort them by.
+The problem isn't level ordering specifically — it's that same-family
+effects aren't kept together at all. Today `effectCategories.ts` (generated
+by `scripts/generate-effect-categories.mjs`) only records *which* category
+(genre) an `EffectKey` belongs to; it discards the position that entry had
+within `skills.json`'s per-genre `skills[genre]` array. `EffectsAutocomplete`'s
+`options` memo therefore sorts only by category index and leaves
+same-category effects in whatever order `availableEffects` happened to
+provide (stable sort preserves `effectKeys.ts` declaration order, which
+has no relation to attribute families).
+
+Confirmed by inspecting `RelicHub/data/skills.json`'s `能力値` (stats) genre
+directly: it already lists 生命力+1/+2/+3 (Vigor), then 精神力+1/+2/+3 (Mind),
+then 持久力+1/+2/+3 (Endurance), and so on — the same family's levels
+adjacent, families in the game's own stat order — for the exact reason the
+user expects. The fix is to preserve and use that existing order, not to
+invent a new one from `Effect.group`/`level` (which wouldn't cover the
+many category entries — skill/character effects, item effects, etc. —
+that have no `group`/`level` at all).
+
+`generate-effect-categories.mjs` gains a second export alongside
+`effectCategories`, recording each `EffectKey`'s index within its genre's
+`skills[genre]` array at the point it was matched (step 3 of the existing
+generation loop, `scripts/generate-effect-categories.mjs:216-232`):
+
+```ts
+export const effectCategoryRank: Record<EffectKey, number>;
+```
+
+Entries assigned to `"その他"` (never matched to a `skills.json` entry) get
+rank `Number.MAX_SAFE_INTEGER`, sorting last within that category —
+there's no ordering signal for them beyond "not one of the categorized
+ones." `EffectsAutocomplete`'s `options` memo's sort gains this as its
+secondary key: `(categoryIndex, effectCategoryRank[key])` instead of
+today's `categoryIndex`-only sort.
 
 ## Testing
 
@@ -185,7 +209,11 @@ no meaningful "level" to sort them by.
   `options` to that category; the "All" chip (or re-clicking the active
   chip) restores the full list; free-text input still filters within the
   active category scope.
-- Unit test for the `options` memo's sort: effects sharing a `group` sort
-  by ascending `level` within their category; ungrouped effects retain
-  their pre-existing relative order; sort remains stable across categories
-  (no cross-category reordering from the new secondary key).
+- Unit test for the generator's `effectCategoryRank` output: every matched
+  `EffectKey` gets the index it had within its genre's `skills[genre]`
+  array; unmatched ("その他") keys get `Number.MAX_SAFE_INTEGER`.
+- Unit test for the `options` memo's sort: same-category effects sort by
+  `effectCategoryRank` (family members stay adjacent, e.g. all of Vigor's
+  levels before Mind's, matching `skills.json`'s order); sort remains
+  stable across categories (no cross-category reordering from the new
+  secondary key).
