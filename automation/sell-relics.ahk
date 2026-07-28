@@ -15,6 +15,14 @@
 GameWindowTitle := "ahk_exe nightreign.exe"
 KeyDelayMs := 180
 
+; Send() uses SendInput mode with zero key-hold time, which many DirectInput
+; games (this one included, potentially) simply ignore. If keys aren't
+; registering in-game during manual verification, try switching to
+; SendEvent with an explicit hold time instead, e.g.:
+;   SendMode("Event")
+;   SetKeyDelay(-1, 30)
+; before the Send() calls below - this sends real timed key-down/key-up
+; events instead of a single low-level input packet.
 ActionToKey := Map(
     "Up", "{Up}",
     "Down", "{Down}",
@@ -37,35 +45,54 @@ ParseActionArray(json) {
     return actions
 }
 
+ShowAbortTooltip(message) {
+    ToolTip("Sell automation aborted: " message)
+    SetTimer(() => ToolTip(), -2000)
+}
+
 F9:: {
     if !WinActive(GameWindowTitle) {
+        ShowAbortTooltip("game window not active")
         return
     }
 
     clipboardText := A_Clipboard
-    if (clipboardText = "") {
+    trimmedText := Trim(clipboardText)
+    if (trimmedText = "") {
+        ShowAbortTooltip("clipboard is empty")
         return
     }
 
-    actions := []
-    try {
-        actions := ParseActionArray(clipboardText)
-    } catch as err {
+    ; Cheap guard against replaying unrelated clipboard content: the
+    ; payload must look like a JSON array and must end with a "Confirm"
+    ; action, otherwise abort without sending anything.
+    if (SubStr(trimmedText, 1, 1) != "[" || SubStr(trimmedText, -1) != "]") {
+        ShowAbortTooltip("clipboard does not look like a sell sequence")
         return
     }
+
+    actions := ParseActionArray(trimmedText)
 
     if (actions.Length = 0) {
+        ShowAbortTooltip("no actions parsed from clipboard")
+        return
+    }
+
+    if (actions[actions.Length] != "Confirm") {
+        ShowAbortTooltip("parsed sequence does not end with Confirm")
         return
     }
 
     for action in actions {
         if !ActionToKey.Has(action) {
             ; Unrecognized action - abort rather than send something wrong.
+            ShowAbortTooltip("unknown action '" action "'")
             return
         }
         if !WinActive(GameWindowTitle) {
             ; Window lost focus mid-sequence - abort rather than send keys
             ; into whatever else is now focused.
+            ShowAbortTooltip("game window lost focus mid-sequence")
             return
         }
         Send(ActionToKey[action])
