@@ -29,8 +29,10 @@ ActionToKey := Map(
 ; parser - deliberately only handles this one shape.
 ParseActionArray(json) {
     actions := []
-    for match in json.RegExMatch('"([A-Za-z]+)"', "g") {
-        actions.Push(match[1])
+    pos := 1
+    while (pos := RegExMatch(json, '"([A-Za-z]+)"', &m, pos)) {
+        actions.Push(m[1])
+        pos += m.Len[0]
     }
     return actions
 }
