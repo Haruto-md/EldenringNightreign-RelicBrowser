@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Stack } from "@mui/material";
+import { Alert, Box, Button, Snackbar, Stack } from "@mui/material";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
@@ -11,6 +11,7 @@ import {
 import { getEffectName, getItemName, getRelicColor } from "../utils/DataUtils";
 import { RelicSlotColor } from "../utils/RelicColor";
 import { doesRelicColorMatch, doesRelicMatch } from "../utils/SearchUtils";
+import { buildSellKeySequence } from "../utils/SellKeySequence";
 import {
   createEmptyEffectFilterState,
   doesRelicMatchEffectFilter,
@@ -54,6 +55,7 @@ export function RelicBrowser({
   // to narrow down to weak relics, not a requirement for selecting anything -
   // you can select any relic you can see, filtered however you like.
   const [selectionMode, setSelectionMode] = useState(false);
+  const [copiedCount, setCopiedCount] = useState<number | null>(null);
 
   const handleToggleSelect = useCallback((relicId: number) => {
     setSelectedIds((prev) => {
@@ -152,6 +154,12 @@ export function RelicBrowser({
     setSelectedIds(new Set());
   }, []);
 
+  const handleCopySellSequence = useCallback(async () => {
+    const sequence = buildSellKeySequence(selectedForSale);
+    await navigator.clipboard.writeText(JSON.stringify(sequence));
+    setCopiedCount(selectedForSale.length);
+  }, [selectedForSale]);
+
   return (
     <Box
       component="section"
@@ -202,6 +210,27 @@ export function RelicBrowser({
           </Stack>
         </Stack>
       )}
+
+      {selectionMode && selectedForSale.length > 0 && (
+        <Button
+          variant="contained"
+          onClick={handleCopySellSequence}
+          sx={{ alignSelf: "flex-start", mb: 1 }}
+        >
+          {t("copySellSequenceButton")}
+        </Button>
+      )}
+
+      <Snackbar
+        open={copiedCount !== null}
+        autoHideDuration={3000}
+        onClose={() => setCopiedCount(null)}
+        message={
+          copiedCount !== null
+            ? t("copySellSequenceCopied", { count: copiedCount })
+            : ""
+        }
+      />
 
       {currentSlot && (
         <Box

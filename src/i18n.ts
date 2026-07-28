@@ -46,6 +46,8 @@ const resources = {
       sellCandidatesTitle: "{{count}} selected - click any relic to add or remove it",
       sellCandidatesSelectAll: "Select all shown",
       sellCandidatesSelectNone: "Clear selection",
+      copySellSequenceButton: "Copy sell sequence",
+      copySellSequenceCopied: "Copied {{count}} actions to clipboard",
 
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",
