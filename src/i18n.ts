@@ -40,14 +40,17 @@ const resources = {
       showingMatchingRelicsTemplate:
         "Showing {{normal}} matching relics and {{deep}} matching deep relics out of {{total}} on character {{character}}",
 
-      selectionModeStart: "Select relics to delete",
+      selectionModeStart: "Select relics to sell",
       selectionModeStop: "Stop selecting",
 
       sellCandidatesTitle: "{{count}} selected - click any relic to add or remove it",
       sellCandidatesSelectAll: "Select all shown",
       sellCandidatesSelectNone: "Clear selection",
       copySellSequenceButton: "Copy sell sequence",
-      copySellSequenceCopied: "Copied {{count}} actions to clipboard",
+      copySellSequenceCopied: "Copied {{count}} relics to clipboard",
+      copySellSequenceError: "Failed to copy to clipboard. Please try again.",
+      mixedSelectionWarning:
+        "Selection mixes normal and deep relics - deselect one type before copying.",
 
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",

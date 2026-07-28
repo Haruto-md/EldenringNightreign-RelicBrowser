@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Snackbar, Stack } from "@mui/material";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
 import { items, ItemType, unsellableItemIds } from "../resources/items";
@@ -56,6 +56,16 @@ export function RelicBrowser({
   // you can select any relic you can see, filtered however you like.
   const [selectionMode, setSelectionMode] = useState(false);
   const [copiedCount, setCopiedCount] = useState<number | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+
+  // currentSlot is a different object reference whenever the character
+  // slot switches (RelicBrowser is not remounted on a slot switch, only on
+  // a tab switch), so selection needs to be cleared explicitly here -
+  // otherwise stale relic ids from the previous slot would silently linger
+  // in selectedIds and get filtered against the new slot's relics.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentSlot]);
 
   const handleToggleSelect = useCallback((relicId: number) => {
     setSelectedIds((prev) => {
@@ -154,11 +164,33 @@ export function RelicBrowser({
     setSelectedIds(new Set());
   }, []);
 
-  const handleCopySellSequence = useCallback(async () => {
-    const sequence = buildSellKeySequence(selectedForSale);
-    await navigator.clipboard.writeText(JSON.stringify(sequence));
-    setCopiedCount(selectedForSale.length);
+  const hasMixedTypeSelection = useMemo(() => {
+    if (selectedForSale.length === 0) {
+      return false;
+    }
+    const isDeepRelic = (relicId: number) =>
+      items.get(relicId)?.type === ItemType.DeepRelic;
+    const hasDeep = selectedForSale.some((relic) => isDeepRelic(relic.itemId));
+    const hasNormal = selectedForSale.some(
+      (relic) => !isDeepRelic(relic.itemId)
+    );
+    return hasDeep && hasNormal;
   }, [selectedForSale]);
+
+  const handleCopySellSequence = useCallback(async () => {
+    if (hasMixedTypeSelection) {
+      setCopyError(t("mixedSelectionWarning"));
+      return;
+    }
+    try {
+      const sequence = buildSellKeySequence(selectedForSale);
+      await navigator.clipboard.writeText(JSON.stringify(sequence));
+      setCopiedCount(selectedForSale.length);
+    } catch (err) {
+      console.error("Failed to copy sell sequence to clipboard:", err);
+      setCopyError(t("copySellSequenceError"));
+    }
+  }, [selectedForSale, hasMixedTypeSelection, t]);
 
   return (
     <Box
@@ -212,13 +244,21 @@ export function RelicBrowser({
       )}
 
       {selectionMode && selectedForSale.length > 0 && (
-        <Button
-          variant="contained"
-          onClick={handleCopySellSequence}
-          sx={{ alignSelf: "flex-start", mb: 1 }}
-        >
-          {t("copySellSequenceButton")}
-        </Button>
+        <Stack sx={{ alignSelf: "flex-start", mb: 1 }} spacing={1}>
+          <Button
+            variant="contained"
+            onClick={handleCopySellSequence}
+            disabled={hasMixedTypeSelection}
+            sx={{ alignSelf: "flex-start" }}
+          >
+            {t("copySellSequenceButton")}
+          </Button>
+          {hasMixedTypeSelection && (
+            <Alert severity="warning" variant="outlined">
+              {t("mixedSelectionWarning")}
+            </Alert>
+          )}
+        </Stack>
       )}
 
       <Snackbar
@@ -231,6 +271,20 @@ export function RelicBrowser({
             : ""
         }
       />
+
+      <Snackbar
+        open={copyError !== null}
+        autoHideDuration={4000}
+        onClose={() => setCopyError(null)}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setCopyError(null)}
+        >
+          {copyError}
+        </Alert>
+      </Snackbar>
 
       {currentSlot && (
         <Box
