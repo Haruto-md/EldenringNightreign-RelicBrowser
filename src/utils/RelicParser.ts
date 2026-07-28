@@ -1,4 +1,3 @@
-import { items, ItemType } from "../resources/items";
 import type {
   BND4Entry,
   CharacterSlot,
@@ -260,69 +259,41 @@ export class RelicParser {
     return foundSlots;
   }
 
+  /**
+   * `relics` arrives already sorted into a single combined "Order Found"
+   * sequence (parseCharacterSlot sorts by sortKey before calling this), and
+   * normal and deep relics are displayed together in that same combined
+   * grid whenever no type filter is active (see RelicDisplay/RelicBrowser).
+   * So `coordinates` must be one continuous index across all of `relics`,
+   * not restarted per relic type - restarting per type previously produced
+   * duplicate "Row 1, Column 1" positions for unrelated relics shown on the
+   * same grid.
+   */
   public static setCoordinates(relics: RelicSlot[]): RelicSlot[] {
-    const normalRelics = relics.filter(
-      ({ itemId }) => items.get(itemId)?.type !== ItemType.DeepRelic
-    );
-    const deepRelics = relics.filter(
-      ({ itemId }) => items.get(itemId)?.type === ItemType.DeepRelic
-    );
     const relicsByColor: Record<RelicColor, RelicSlot[]> = {
-      [RelicSlotColor.Red]: normalRelics.filter(
+      [RelicSlotColor.Red]: relics.filter(
         (r) => getRelicColor(r.itemId) === RelicSlotColor.Red
       ),
-      [RelicSlotColor.Blue]: normalRelics.filter(
+      [RelicSlotColor.Blue]: relics.filter(
         (r) => getRelicColor(r.itemId) === RelicSlotColor.Blue
       ),
-      [RelicSlotColor.Yellow]: normalRelics.filter(
+      [RelicSlotColor.Yellow]: relics.filter(
         (r) => getRelicColor(r.itemId) === RelicSlotColor.Yellow
       ),
-      [RelicSlotColor.Green]: normalRelics.filter(
+      [RelicSlotColor.Green]: relics.filter(
         (r) => getRelicColor(r.itemId) === RelicSlotColor.Green
       ),
     };
 
-    const deepRelicsByColor: Record<RelicColor, RelicSlot[]> = {
-      [RelicSlotColor.Red]: deepRelics.filter(
-        (r) => getRelicColor(r.itemId) === RelicSlotColor.Red
-      ),
-      [RelicSlotColor.Blue]: deepRelics.filter(
-        (r) => getRelicColor(r.itemId) === RelicSlotColor.Blue
-      ),
-      [RelicSlotColor.Yellow]: deepRelics.filter(
-        (r) => getRelicColor(r.itemId) === RelicSlotColor.Yellow
-      ),
-      [RelicSlotColor.Green]: deepRelics.filter(
-        (r) => getRelicColor(r.itemId) === RelicSlotColor.Green
-      ),
-    };
-
-    for (let i = 0; i < normalRelics.length; i++) {
+    for (let i = 0; i < relics.length; i++) {
       // 8 per row
-      const relic = normalRelics[i];
+      const relic = relics[i];
       const row = Math.floor(i / 8);
       const column = i % 8;
       const coordinates: [number, number] = [row, column];
 
       const color = getRelicColor(relic.itemId);
       const index = relicsByColor[color].indexOf(relic);
-      const rowByColor = Math.floor(index / 8);
-      const columnByColor = index % 8;
-      const coordinatesByColor: [number, number] = [rowByColor, columnByColor];
-
-      relic.coordinates = coordinates;
-      relic.coordinatesByColor = coordinatesByColor;
-    }
-
-    for (let i = 0; i < deepRelics.length; i++) {
-      // 8 per row
-      const relic = deepRelics[i];
-      const row = Math.floor(i / 8);
-      const column = i % 8;
-      const coordinates: [number, number] = [row, column];
-
-      const color = getRelicColor(relic.itemId);
-      const index = deepRelicsByColor[color].indexOf(relic);
       const rowByColor = Math.floor(index / 8);
       const columnByColor = index % 8;
       const coordinatesByColor: [number, number] = [rowByColor, columnByColor];

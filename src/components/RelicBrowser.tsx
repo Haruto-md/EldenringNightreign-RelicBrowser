@@ -164,37 +164,7 @@ export function RelicBrowser({
     setSelectedIds(new Set());
   }, []);
 
-  // Mirrors the unsellableItemIds filtering buildSellKeySequence itself
-  // applies internally, so this UI check can't disagree with what the
-  // function would actually produce (e.g. a selection mixing a sellable
-  // normal relic and an unsellable deep relic must not be blocked here,
-  // since buildSellKeySequence would silently drop the unsellable one).
-  const sellableSelection = useMemo(
-    () =>
-      selectedForSale.filter(
-        (relic) => !unsellableItemIds.includes(relic.itemId)
-      ),
-    [selectedForSale]
-  );
-
-  const hasMixedTypeSelection = useMemo(() => {
-    if (sellableSelection.length === 0) {
-      return false;
-    }
-    const isDeepRelic = (relicId: number) =>
-      items.get(relicId)?.type === ItemType.DeepRelic;
-    const hasDeep = sellableSelection.some((relic) => isDeepRelic(relic.itemId));
-    const hasNormal = sellableSelection.some(
-      (relic) => !isDeepRelic(relic.itemId)
-    );
-    return hasDeep && hasNormal;
-  }, [sellableSelection]);
-
   const handleCopySellSequence = useCallback(async () => {
-    if (hasMixedTypeSelection) {
-      setCopyError(t("mixedSelectionWarning"));
-      return;
-    }
     try {
       const sequence = buildSellKeySequence(selectedForSale);
       await navigator.clipboard.writeText(JSON.stringify(sequence));
@@ -210,7 +180,7 @@ export function RelicBrowser({
       console.error("Failed to copy sell sequence to clipboard:", err);
       setCopyError(t("copySellSequenceError"));
     }
-  }, [selectedForSale, hasMixedTypeSelection, t]);
+  }, [selectedForSale, t]);
 
   return (
     <Box
@@ -264,21 +234,13 @@ export function RelicBrowser({
       )}
 
       {selectionMode && selectedForSale.length > 0 && (
-        <Stack sx={{ alignSelf: "flex-start", mb: 1 }} spacing={1}>
-          <Button
-            variant="contained"
-            onClick={handleCopySellSequence}
-            disabled={hasMixedTypeSelection}
-            sx={{ alignSelf: "flex-start" }}
-          >
-            {t("copySellSequenceButton")}
-          </Button>
-          {hasMixedTypeSelection && (
-            <Alert severity="warning" variant="outlined">
-              {t("mixedSelectionWarning")}
-            </Alert>
-          )}
-        </Stack>
+        <Button
+          variant="contained"
+          onClick={handleCopySellSequence}
+          sx={{ alignSelf: "flex-start", mb: 1 }}
+        >
+          {t("copySellSequenceButton")}
+        </Button>
       )}
 
       <Snackbar

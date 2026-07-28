@@ -80,15 +80,16 @@ describe("buildSellKeySequence", () => {
     ).toEqual([]);
   });
 
-  it("throws when candidates mix normal and deep relics", () => {
+  it("handles candidates mixing normal and deep relics like any other selection", () => {
     // itemId 104 is a normal relic; itemId 30000 (deepDelicateBurningScene)
-    // is a deep relic (see src/resources/items.ts) - normal and deep
-    // relics live on separate in-game screens.
-    expect(() =>
+    // is a deep relic (see src/resources/items.ts). RelicParser.setCoordinates
+    // assigns coordinates across all of a slot's relics as one combined
+    // sequence, so there's nothing special about a mixed-type selection.
+    expect(
       buildSellKeySequence([
         makeCandidate(0, 0, 104),
         makeCandidate(0, 1, 30000),
       ])
-    ).toThrow();
+    ).toEqual(["Select", "Select", "Confirm"]);
   });
 });

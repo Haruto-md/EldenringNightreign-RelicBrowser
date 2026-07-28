@@ -1,4 +1,4 @@
-import { items, ItemType, unsellableItemIds } from "../resources/items";
+import { unsellableItemIds } from "../resources/items";
 import type { RelicSlot } from "../types/SaveFile";
 
 export type SellAction = "Right" | "Select" | "Confirm";
@@ -29,10 +29,11 @@ const GRID_COLS = 8;
  * `unsellableItemIds` are filtered out as a hard safety net regardless of
  * what the caller passed in - RelicBrowser's selection mode is deliberately
  * independent of the sellable/redundant display filter, so a caller can
- * hand this function an unsellable relic. Normal and deep relics live on
- * separate in-game grids/screens, so a mixed selection can't be turned into
- * a single coherent sequence - this throws rather than silently producing
- * a nonsensical one.
+ * hand this function an unsellable relic. Normal and deep relics share one
+ * combined coordinate space (RelicParser.setCoordinates assigns coordinates
+ * across all of a slot's relics as a single sequence) and are shown
+ * together on the same in-game grid whenever no type filter is active, so a
+ * mixed-type selection is not a special case here.
  */
 export function buildSellKeySequence(candidates: RelicSlot[]): SellAction[] {
   const sellableCandidates = candidates.filter(
@@ -41,18 +42,6 @@ export function buildSellKeySequence(candidates: RelicSlot[]): SellAction[] {
 
   if (sellableCandidates.length === 0) {
     return [];
-  }
-
-  const isDeepRelic = (candidate: RelicSlot): boolean =>
-    items.get(candidate.itemId)?.type === ItemType.DeepRelic;
-  const hasDeepRelic = sellableCandidates.some(isDeepRelic);
-  const hasNormalRelic = sellableCandidates.some(
-    (candidate) => !isDeepRelic(candidate)
-  );
-  if (hasDeepRelic && hasNormalRelic) {
-    throw new Error(
-      "buildSellKeySequence: candidates mix normal and deep relics, which live on separate in-game screens and cannot share a single key sequence"
-    );
   }
 
   const actions: SellAction[] = [];

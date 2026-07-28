@@ -49,8 +49,6 @@ const resources = {
       copySellSequenceButton: "Copy sell sequence",
       copySellSequenceCopied: "Copied {{count}} relics to clipboard",
       copySellSequenceError: "Failed to copy to clipboard. Please try again.",
-      mixedSelectionWarning:
-        "Selection mixes normal and deep relics - deselect one type before copying.",
 
       nightfarers: {
         [Nightfarer.Wylder]: "Wylder",
