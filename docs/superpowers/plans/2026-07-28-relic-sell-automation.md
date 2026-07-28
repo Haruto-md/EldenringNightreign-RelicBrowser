@@ -14,7 +14,7 @@
 - Manual arrow keys: `Right`/`Left` move to the adjacent column keeping the same row; `Up`/`Down` move within the current column — **except** pressing `Right` while on column 8 moves to column 1 of the next row instead (there is no column 9).
 - `F` (select) selects the relic under the cursor and auto-advances the cursor exactly as one `Right` press would (including the column-8 wrap above).
 - `3` opens the sell confirmation screen for everything selected so far; the actual final confirmation inside that screen is always done by a human, never automated.
-- `RelicSlot.coordinates` is `[row, column]` and is already produced in increasing (column, row) order by the existing parser — `buildSellKeySequence` must not sort its input.
+- `RelicSlot.coordinates` is `[row, column]` and is already produced in increasing row-major (linear index) order by the existing parser — `buildSellKeySequence` must not sort its input.
 - No code in this repo may write to, download, or otherwise produce a modified `.sl2` save file. Selling happens only through the real game UI.
 
 ---
