@@ -285,4 +285,59 @@ describe("ComboSearch damage mode", () => {
     // not all 3001 relics.
     expect(workerInput.relics.length).toBeLessThanOrEqual(11);
   });
+
+  it("still caps the candidate set with restrictToScoringRelics=false, just with a higher cap", () => {
+    // Regression test for a real bug: restrictToScoringRelics=false used to
+    // pass through every color-eligible relic completely unfiltered. With a
+    // realistic inventory (hundreds of same-color relics) this pushed the
+    // WASM search into hundreds of millions of checked combinations (tens of
+    // seconds), and a user re-clicking "検索" while that was still running
+    // would cancel it via the single-flight worker, silently producing an
+    // empty result with no console error. The unrestricted mode must widen
+    // the gap-filler cap, not remove it.
+    const meleeEffect = getEffectByKey(EffectKey.improvedMeleeAttackPower);
+    assert(meleeEffect !== undefined);
+    const irrelevantEffect = getEffectByKey(EffectKey.strengthPlus1);
+    assert(irrelevantEffect !== undefined);
+
+    const RED_ITEM_ID = 102;
+
+    const normalRelics: RelicSlot[] = [
+      makeRelic(RED_ITEM_ID, meleeEffect),
+      ...Array.from({ length: 3000 }, () =>
+        makeRelic(RED_ITEM_ID, irrelevantEffect)
+      ),
+    ];
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+    multiplierArray[EffectKey.improvedMeleeAttackPower] = 1.05;
+
+    const workerInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      normalRelics,
+      [],
+      [vessel],
+      multiplierArray,
+      [],
+      [],
+      false
+    );
+
+    // 1 real candidate + a wider, but still capped, gap-filler batch (at
+    // most 60 per color) — not all 3001 relics.
+    expect(workerInput.relics.length).toBeLessThanOrEqual(61);
+    expect(workerInput.relics.length).toBeGreaterThan(11);
+  });
 });

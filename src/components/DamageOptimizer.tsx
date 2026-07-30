@@ -17,6 +17,7 @@ import {
   Select,
   type SelectChangeEvent,
   Stack,
+  Switch,
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -165,6 +166,12 @@ interface DamageOptSettings {
   mustHaves: MustHaveEntry[];
   excludedDemerits: number[];
   disabledVessels: string[];
+  // When true (default), only relics carrying an effect that boosts damage
+  // (>1.0x) or is named by a must-have are considered as search candidates,
+  // so every result clears the 1.0x bar. Turning this off widens the
+  // candidate pool to every relic of a usable color, at the cost of a slower
+  // search, so combinations that don't clear 1.0x can show up too.
+  restrictToScoringRelics: boolean;
 }
 
 function createDefaultSettings(): DamageOptSettings {
@@ -176,6 +183,7 @@ function createDefaultSettings(): DamageOptSettings {
     mustHaves: [],
     excludedDemerits: [],
     disabledVessels: [],
+    restrictToScoringRelics: true,
   };
 }
 
@@ -274,6 +282,10 @@ function loadSettingsFromStorage(): Record<Nightfarer, DamageOptSettings> {
       current.mustHaves = sanitizeMustHaves(val.mustHaves);
       current.excludedDemerits = sanitizeNumberArray(val.excludedDemerits);
       current.disabledVessels = sanitizeStringArray(val.disabledVessels);
+      current.restrictToScoringRelics =
+        typeof val.restrictToScoringRelics === "boolean"
+          ? val.restrictToScoringRelics
+          : true;
     });
     return base;
   } catch {
@@ -489,6 +501,13 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     [updateCurrent]
   );
 
+  const toggleRestrictToScoringRelics = useCallback(() => {
+    updateCurrent((s) => ({
+      ...s,
+      restrictToScoringRelics: !s.restrictToScoringRelics,
+    }));
+  }, [updateCurrent]);
+
   const toggleVessel = useCallback(
     (vesselId: string) => {
       updateCurrent((s) => {
@@ -592,6 +611,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         multiplierArray,
         current.excludedDemerits,
         effectRanges,
+        current.restrictToScoringRelics,
         (p: ComboSearchProgress) => {
           if (myRunId === runIdRef.current) {
             setProgress(p);
@@ -623,6 +643,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     multiplierArray,
     current.excludedDemerits,
     current.mustHaves,
+    current.restrictToScoringRelics,
   ]);
 
   useEffect(() => {
@@ -970,6 +991,16 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
               <>&nbsp;</>
             )}
           </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={!current.restrictToScoringRelics}
+                onChange={toggleRestrictToScoringRelics}
+                size="small"
+              />
+            }
+            label="ダメージ倍率が1倍以下のレリックも候補に含める（検索が遅くなります）"
+          />
         </Box>
 
         {searchResults && (

@@ -283,6 +283,7 @@ export async function searchDamageCombinations(
   multiplierArray: Float32Array,
   excludedDemeritKeys: number[],
   effectRanges: SelectedEffectEntry[] = [],
+  restrictToScoringRelics: boolean = true,
   onProgress?: (progress: ComboSearchProgress) => void
 ): Promise<ComboSearchResult> {
   const data = buildDamageWorkerInput(
@@ -292,7 +293,8 @@ export async function searchDamageCombinations(
     enabledVessels,
     multiplierArray,
     excludedDemeritKeys,
-    effectRanges
+    effectRanges,
+    restrictToScoringRelics
   );
 
   return runWorkerSearch(data, enabledVessels, onProgress);
@@ -375,21 +377,33 @@ function filterRelics(
   return filteredRelics;
 }
 
+// Non-scoring relics added per color as fillers, capped so the WASM search
+// (which enumerates candidates cubically per color group: anchor x other-slot
+// x other-slot) stays tractable. Verified empirically: ~300 same-color relics
+// pushes the search into the hundreds-of-millions of combinations checked
+// (tens of seconds, effectively hanging the tab for a full inventory), so
+// this cap is deliberately far below what a real relic collection can reach.
+const RESTRICTED_GAP_FILLER_CAP = 10;
+const UNRESTRICTED_GAP_FILLER_CAP = 60;
+
 // Damage-mode candidate filtering: keep only relics of a color used by an
-// enabled vessel slot AND carrying an effect that actually matters for
-// scoring (a damage multiplier > 1.0) or is named by a must-have range —
-// mirroring filterRelics' effect-based narrowing above. WASM's
-// search_group_triples enumerates candidates cubically per color group
-// (anchor x other-slot x other-slot), so without this narrowing a full
-// relic inventory (hundreds-to-thousands of relics) makes the search run
-// effectively forever / exhaust memory. Gap-fill so vessel slots without a
-// scoring candidate of their color can still be completed with a filler.
+// enabled vessel slot. Relics carrying an effect that actually matters for
+// scoring (a damage multiplier > 1.0) or is named by a must-have range are
+// always kept in full — mirroring filterRelics' effect-based narrowing
+// above. The rest ("non-scoring" relics) are added back in as capped
+// fillers so every vessel slot can still be completed even without a
+// scoring candidate of its color. restrictToScoring=false raises that cap
+// (RESTRICTED_GAP_FILLER_CAP -> UNRESTRICTED_GAP_FILLER_CAP) so more
+// non-scoring relics are considered — surfacing combinations that don't
+// clear the 1.0x bar — without lifting the cap entirely, which would make
+// the search run effectively forever for a full relic inventory.
 function filterRelicsForDamage(
   relics: RelicSlot[],
   enabledVessels: Vessel[],
   deepRelics: boolean,
   multiplierArray: Float32Array,
-  mustHaveEffectKeys: number[]
+  mustHaveEffectKeys: number[],
+  restrictToScoring: boolean
 ): RelicSlot[] {
   const vesselSlotIndices = deepRelics ? [3, 4, 5] : [0, 1, 2];
   const enabledRelicColors = new Set(
@@ -401,14 +415,18 @@ function filterRelicsForDamage(
   const isRelevantEffectKey = (key: number): boolean =>
     multiplierArray[key] > 1 || mustHaveKeySet.has(key);
 
-  const filteredRelics = relics.filter((relic) => {
+  const colorEligible = (relic: RelicSlot): boolean => {
     const item = items.get(relic.itemId);
-    if (
-      item === undefined ||
-      item.color === null ||
-      (!enabledRelicColors.has(item.color) &&
-        !enabledRelicColors.has(RelicSlotColor.Any))
-    ) {
+    return (
+      item !== undefined &&
+      item.color !== null &&
+      (enabledRelicColors.has(item.color) ||
+        enabledRelicColors.has(RelicSlotColor.Any))
+    );
+  };
+
+  const filteredRelics = relics.filter((relic) => {
+    if (!colorEligible(relic)) {
       return false;
     }
     return relic.effects.some(
@@ -417,6 +435,10 @@ function filterRelicsForDamage(
         (debuff !== undefined && isRelevantEffectKey(debuff.key))
     );
   });
+
+  const gapFillerCap = restrictToScoring
+    ? RESTRICTED_GAP_FILLER_CAP
+    : UNRESTRICTED_GAP_FILLER_CAP;
 
   const relicsByColor = sortRelicsByColor(filteredRelics);
   Object.entries(relicsByColor).forEach(([color, filteredRelicsByColor]) => {
@@ -432,7 +454,9 @@ function filterRelicsForDamage(
 
     candidates.sort((a, b) => b.effectCount - a.effectCount);
 
-    const gapFillerRelics = candidates.slice(0, 10).map((c) => c.relic);
+    const gapFillerRelics = candidates
+      .slice(0, gapFillerCap)
+      .map((c) => c.relic);
     filteredRelics.push(...gapFillerRelics);
   });
 
@@ -501,7 +525,8 @@ export function buildDamageWorkerInput(
   enabledVessels: Vessel[],
   multiplierArray: Float32Array,
   excludedDemeritKeys: number[],
-  effectRanges: SelectedEffectEntry[] = []
+  effectRanges: SelectedEffectEntry[] = [],
+  restrictToScoringRelics: boolean = true
 ): ComboSearchWorkerInput {
   const mustHaveEffectKeys = effectRanges
     .filter(({ minStacks }) => minStacks > 0)
@@ -515,14 +540,16 @@ export function buildDamageWorkerInput(
       enabledVessels,
       false,
       multiplierArray,
-      mustHaveEffectKeys
+      mustHaveEffectKeys,
+      restrictToScoringRelics
     ),
     deepRelics: filterRelicsForDamage(
       deepRelics,
       enabledVessels,
       true,
       multiplierArray,
-      mustHaveEffectKeys
+      mustHaveEffectKeys,
+      restrictToScoringRelics
     ),
     enabledVessels,
     selectedEffectRanges: effectRanges,
