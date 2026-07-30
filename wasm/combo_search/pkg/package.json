@@ -1,0 +1,15 @@
+{
+  "name": "combo_search",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "combo_search_bg.wasm",
+    "combo_search.js",
+    "combo_search.d.ts"
+  ],
+  "main": "combo_search.js",
+  "types": "combo_search.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

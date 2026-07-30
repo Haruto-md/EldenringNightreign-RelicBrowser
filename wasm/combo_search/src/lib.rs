@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 use serde::{Serialize, Deserialize};
 use serde_wasm_bindgen;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU32, Ordering};
 // Added: rayon parallel iteration
 use rayon::prelude::*;
 // Re-export for JS thread pool init
@@ -28,6 +29,40 @@ const ANY_COLOR: usize = 0;
 const TOP_RESULTS: usize = 50;
 // Internal caps when enumerating normal/deep triples before merging
 const TOP_GROUP_RESULTS: usize = 200;
+
+// Batch size for flushing the live-progress atomic counter. Each parallel
+// per-vessel search call site tracks its own local `checked_local` and only
+// flushes to the shared atomic every PROGRESS_BATCH combinations — this
+// bounds atomic-op/cache-contention overhead across rayon's threads. The
+// final `total_combinations_checked` returned to JS is NEVER read from this
+// atomic; it always comes from the accurate local counters, so a search
+// result is byte-for-byte identical to before this counter existed.
+const PROGRESS_BATCH: u32 = 256;
+static PROGRESS_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+#[inline(always)]
+fn record_progress(checked_local: u32) {
+    if checked_local % PROGRESS_BATCH == 0 {
+        PROGRESS_COUNTER.fetch_add(PROGRESS_BATCH, Ordering::Relaxed);
+    }
+}
+
+/// Returns the module's shared `WebAssembly.Memory`. JS builds an
+/// `Int32Array` view over its `.buffer` to poll `PROGRESS_COUNTER` live with
+/// `Atomics.load` from the main thread while a search runs on a worker
+/// thread (the worker itself is blocked inside the synchronous
+/// `search_combinations` call and can't post progress messages itself).
+#[wasm_bindgen]
+pub fn wasm_memory() -> JsValue {
+    wasm_bindgen::memory()
+}
+
+/// Byte address of `PROGRESS_COUNTER` inside the shared wasm linear memory.
+/// JS divides this by 4 to get an `Int32Array` element index.
+#[wasm_bindgen]
+pub fn progress_counter_ptr() -> u32 {
+    &PROGRESS_COUNTER as *const AtomicU32 as u32
+}
 
 // Reusable scoring context avoiding per-combination clears
 struct ScoreContext {
@@ -495,6 +530,7 @@ fn search_group_triples(
                 group_indices[other_slots[0]] = a_opt;
                 group_indices[other_slots[1]] = b_opt;
                 checked_local += 1;
+                record_progress(checked_local);
 
                 // Calculate points for this group in isolation (other group empty)
                 let mut full_indices6: [Option<usize>;6] = [None;6];
@@ -574,6 +610,7 @@ fn search_group_triples(
 
 #[wasm_bindgen]
 pub fn search_combinations(input: JsValue) -> JsValue {
+    PROGRESS_COUNTER.store(0, Ordering::Relaxed);
     let input: SearchInput = match serde_wasm_bindgen::from_value(input) {
         Ok(v) => v,
         Err(_) => { return serde_wasm_bindgen::to_value(&SearchOutput { combinations: vec![], total_combinations_checked: 0 }).unwrap(); }
@@ -738,6 +775,7 @@ pub fn search_combinations(input: JsValue) -> JsValue {
                     deep_idxs[0], deep_idxs[1], deep_idxs[2],
                 ];
                 checked_local += 1;
+                record_progress(checked_local);
                 add_combination_if_unique6(
                     &mut local_results,
                     &mut local_seen,
