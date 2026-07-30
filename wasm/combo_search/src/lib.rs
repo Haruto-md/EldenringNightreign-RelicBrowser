@@ -444,38 +444,46 @@ fn combination_satisfies_ranges(
     true
 }
 
-// True if any slotted relic in this partial 6-combo carries an effect that is a
-// must-have (a range with min_stacks > 0), respecting the nightfarer gate the
-// same way combination_satisfies_ranges does.
+// Number of DISTINCT required-must-have keys (from `range_keys`) carried by
+// any slotted relic in this partial 6-combo, respecting the nightfarer gate
+// the same way combination_satisfies_ranges does. A plain "carries any
+// must-have" boolean can't tell a triple that covers two different required
+// keys (needed together to satisfy both) from one that only covers a single
+// key - see triple_key_less below for why that distinction matters.
 #[inline(always)]
-fn triple_carries_musthave(
+fn triple_covered_key_count(
     indices6: &[Option<usize>; 6],
     relics_normal: &[RelicSlot],
     relics_deep: &[RelicSlot],
     nightfarer: u8,
-    range_min_keys: &[bool; EFFECT_KEY_SPACE],
-) -> bool {
-    for (slot_i, opt_idx) in indices6.iter().enumerate() {
-        if let Some(idx) = opt_idx {
-            let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } } else { unsafe { relics_deep.get_unchecked(*idx) } };
-            for effect in &relic.effects {
-                if let Some(nf) = effect.nightfarer { if nf != nightfarer { continue; } }
-                let k = effect.key as usize;
-                if k < EFFECT_KEY_SPACE && unsafe { *range_min_keys.get_unchecked(k) } { return true; }
+    range_keys: &[u32],
+) -> u8 {
+    let mut covered = 0u8;
+    for &key in range_keys {
+        for (slot_i, opt_idx) in indices6.iter().enumerate() {
+            if let Some(idx) = opt_idx {
+                let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } } else { unsafe { relics_deep.get_unchecked(*idx) } };
+                let found = relic.effects.iter().any(|effect| {
+                    if let Some(nf) = effect.nightfarer { if nf != nightfarer { return false; } }
+                    effect.key == key
+                });
+                if found { covered += 1; break; }
             }
         }
     }
-    false
+    covered
 }
 
-// Retention priority key for a group triple: must-have-carrying triples always
-// outrank non-carrying ones, and ties break by damage points. Used so top-K
-// group pruning never discards a triple needed to satisfy a must-have range in
-// favor of a higher-damage triple that ignores it. When no must-haves exist,
-// every triple's flag is false and this degrades to ordering by points alone.
+// Retention priority key for a group triple: triples covering more distinct
+// required must-have keys always outrank ones covering fewer, and ties break
+// by damage points. Used so top-K group pruning never discards a triple
+// needed to jointly satisfy several must-have ranges in favor of a
+// higher-damage triple that only covers one (or none) of them. When no
+// must-haves exist, every triple's count is 0 and this degrades to ordering
+// by points alone.
 #[inline(always)]
-fn triple_key_less(a: (bool, f32), b: (bool, f32)) -> bool {
-    (!a.0 && b.0) || (a.0 == b.0 && a.1 < b.1)
+fn triple_key_less(a: (u8, f32), b: (u8, f32)) -> bool {
+    a.0 < b.0 || (a.0 == b.0 && a.1 < b.1)
 }
 
 fn search_group_triples(
@@ -491,11 +499,11 @@ fn search_group_triples(
     damage_mode: bool,
     damage_mults: &[f32],
     excluded_demerits: &[u32],
-    range_min_keys: &[bool; EFFECT_KEY_SPACE],
-) -> (Vec<([Option<usize>;3], f32, bool)>, u32) {
-    let mut local_results: Vec<([Option<usize>;3], f32, bool)> = Vec::with_capacity(TOP_GROUP_RESULTS);
+    range_keys: &[u32],
+) -> (Vec<([Option<usize>;3], f32, u8)>, u32) {
+    let mut local_results: Vec<([Option<usize>;3], f32, u8)> = Vec::with_capacity(TOP_GROUP_RESULTS);
     let mut local_seen: HashSet<u32> = HashSet::new();
-    let mut min_tracker: (usize, (bool, f32)) = (0, (true, f32::INFINITY));
+    let mut min_tracker: (usize, (u8, f32)) = (0, (u8::MAX, f32::INFINITY));
     let mut score_ctx = ScoreContext::new();
     let mut checked_local: u32 = 0;
 
@@ -562,19 +570,23 @@ fn search_group_triples(
 
                 // A must-have effect may carry no damage multiplier at all, so its
                 // triples would otherwise lose every points-only pruning contest and
-                // never survive to the final 6-slot merge. Rank must-have-carrying
-                // triples above all others so top-K pruning can never discard the
-                // only triples capable of satisfying a must-have range.
-                let carries_mh = damage_mode && triple_carries_musthave(
-                    &full_indices6, relics_normal, relics_deep, nightfarer, range_min_keys
-                );
-                let this_priority = (carries_mh, points);
+                // never survive to the final 6-slot merge. Rank triples covering more
+                // distinct required keys above ones covering fewer so top-K pruning
+                // can never discard the only triple capable of jointly satisfying
+                // several must-have ranges in favor of a higher-damage triple that
+                // only covers one of them.
+                let covered_count = if damage_mode {
+                    triple_covered_key_count(
+                        &full_indices6, relics_normal, relics_deep, nightfarer, range_keys
+                    )
+                } else { 0 };
+                let this_priority = (covered_count, points);
 
                 let unique_key = pack_triple_key(group_indices);
                 if !local_seen.insert(unique_key) { return; }
 
                 if local_results.len() < TOP_GROUP_RESULTS {
-                    local_results.push((group_indices, points, carries_mh));
+                    local_results.push((group_indices, points, covered_count));
                     if triple_key_less(this_priority, min_tracker.1) {
                         min_tracker = (local_results.len() - 1, this_priority);
                     }
@@ -583,7 +595,7 @@ fn search_group_triples(
                 if !triple_key_less(min_tracker.1, this_priority) { return; }
                 // Replace min
                 let min_i = min_tracker.0;
-                local_results[min_i] = (group_indices, points, carries_mh);
+                local_results[min_i] = (group_indices, points, covered_count);
                 // Recompute min
                 let mut new_min_i = 0usize;
                 let mut new_min_p = (local_results[0].2, local_results[0].1);
@@ -603,7 +615,7 @@ fn search_group_triples(
     }
 
     // Ensure at least an empty triple so merging can still happen when this group has no relics
-    if local_results.is_empty() { local_results.push(([None, None, None], 0.0, false)); }
+    if local_results.is_empty() { local_results.push(([None, None, None], 0.0, 0)); }
 
     (local_results, checked_local)
 }
@@ -652,10 +664,12 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     // Keys named by a must-have range (min_stacks > 0). In damage mode these
     // must also qualify a relic as a candidate — see is_damage_mode_candidate.
     let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+    let mut range_keys: Vec<u32> = Vec::new();
     for (k, min, _max) in &ranges_vec {
         if *min > 0 {
             let ku = *k as usize;
             if ku < EFFECT_KEY_SPACE { range_min_keys[ku] = true; }
+            range_keys.push(*k);
         }
     }
 
@@ -745,7 +759,7 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             damage_mode,
             &damage_mults,
             &excluded_demerits,
-            &range_min_keys,
+            &range_keys,
         );
         checked_local += checked_norm;
 
@@ -762,7 +776,7 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             damage_mode,
             &damage_mults,
             &excluded_demerits,
-            &range_min_keys,
+            &range_keys,
         );
         checked_local += checked_deep;
 
@@ -940,8 +954,7 @@ mod damage_tests {
         let by_color_cand_norm = by_color_all_norm.clone();
 
         let damage_mults = mults(&[(10, 1.5)]); // key 30 stays 1.0 (no damage contribution)
-        let mut range_min_keys = [false; EFFECT_KEY_SPACE];
-        range_min_keys[30] = true;
+        let range_keys: Vec<u32> = vec![30];
 
         let selected_bitmap = [false; EFFECT_KEY_SPACE];
         let recommended_bitmap = [false; EFFECT_KEY_SPACE];
@@ -962,18 +975,96 @@ mod damage_tests {
             true, // damage_mode
             &damage_mults,
             &excluded_demerits,
-            &range_min_keys,
+            &range_keys,
         );
 
         assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
-        let has_musthave_triple = triples.iter().any(|(indices, _points, carries_mh)| {
-            *carries_mh && indices.iter().any(|i| *i == Some(musthave_relic_idx))
+        let has_musthave_triple = triples.iter().any(|(indices, _points, covered_count)| {
+            *covered_count > 0 && indices.iter().any(|i| *i == Some(musthave_relic_idx))
         });
         assert!(
             has_musthave_triple,
             "the only relic carrying the must-have effect was pruned away by \
              {FILLER_COUNT} higher-damage fillers despite TOP_GROUP_RESULTS pruning \
              being must-have-aware"
+        );
+    }
+
+    #[test]
+    fn triple_covering_two_distinct_musthave_keys_survives_pruning_against_single_key_fillers() {
+        // Regression test for a real bug: search_group_triples' retention
+        // priority is a single "carries ANY must-have" boolean, not which
+        // required key(s) a triple actually covers. With multiple distinct
+        // must-have keys requested, a triple that jointly covers two
+        // different required keys (needed together to satisfy both ranges)
+        // can be outranked purely on damage points by triples that only
+        // cover one of the keys - even though those single-key triples can
+        // never help satisfy the other requirement. Enough high-damage
+        // single-key fillers evict the only triple covering both keys
+        // before the merge/range-check step, producing zero search results
+        // even though a valid full combination exists.
+        const NOISE_COUNT: usize = TOP_GROUP_RESULTS + 50;
+
+        // Every noise relic carries required key 30 (redundantly - many
+        // other relics already cover it) plus a real damage multiplier, so
+        // noise-only triples always outscore any triple needing the rare
+        // relic below.
+        let mut normal: Vec<RelicSlot> = (0..NOISE_COUNT)
+            .map(|_| relic(vec![(10, Some(true), None), (30, Some(true), None)]))
+            .collect();
+        // The only relic carrying required key 31 - no damage multiplier,
+        // so any triple including it scores lower than pure-noise triples.
+        let rare_relic_idx = normal.len();
+        normal.push(relic(vec![(31, Some(true), None)]));
+
+        let by_color_all_norm: Vec<Vec<usize>> =
+            vec![(0..normal.len()).collect::<Vec<usize>>(); COLOR_SPACE];
+        let by_color_cand_norm = by_color_all_norm.clone();
+
+        let damage_mults = mults(&[(10, 1.5)]); // keys 30/31 stay 1.0
+        let range_keys: Vec<u32> = vec![30, 31];
+
+        let selected_bitmap = [false; EFFECT_KEY_SPACE];
+        let recommended_bitmap = [false; EFFECT_KEY_SPACE];
+        let deep: Vec<RelicSlot> = vec![];
+        let excluded_demerits: Vec<u32> = vec![];
+        let norm_slots: [u8; 3] = [1, 1, 1];
+
+        let (triples, _checked) = search_group_triples(
+            norm_slots,
+            &by_color_all_norm,
+            &by_color_cand_norm,
+            &normal,
+            &deep,
+            false,
+            0,
+            &selected_bitmap,
+            &recommended_bitmap,
+            true,
+            &damage_mults,
+            &excluded_demerits,
+            &range_keys,
+        );
+
+        assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
+        let has_both_keys_triple = triples.iter().any(|(indices, _points, _carries_mh)| {
+            let mut has30 = false;
+            let mut has31 = false;
+            for opt in indices.iter() {
+                if let Some(idx) = opt {
+                    for eff in &normal[*idx].effects {
+                        if eff.key == 30 { has30 = true; }
+                        if eff.key == 31 { has31 = true; }
+                    }
+                }
+            }
+            has30 && has31
+        });
+        assert!(
+            has_both_keys_triple,
+            "the only triple covering both required keys (30 and 31, via relic \
+             {rare_relic_idx}) was pruned away by {NOISE_COUNT} higher-damage \
+             triples that only cover key 30"
         );
     }
 }
