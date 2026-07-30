@@ -193,11 +193,7 @@ self.onmessage = async (event: MessageEvent<ComboSearchWorkerRequest>) => {
     // is best-effort: if anything here fails or isn't available, the search
     // still proceeds normally with no live progress (today's indeterminate
     // spinner behavior).
-    if (
-      threadPoolInitialized &&
-      typeof wasm_memory === "function" &&
-      typeof progress_counter_ptr === "function"
-    ) {
+    if (threadPoolInitialized) {
       try {
         const memory = wasm_memory() as WebAssembly.Memory;
         const ptr = progress_counter_ptr() as number;
