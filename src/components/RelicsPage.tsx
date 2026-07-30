@@ -2,6 +2,7 @@ import {
   Alert,
   AppBar,
   Box,
+  Button,
   CircularProgress,
   IconButton,
   Tab,
@@ -9,7 +10,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { Clear } from "@mui/icons-material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import type { SaveFileData } from "../types/SaveFile";
@@ -32,6 +33,7 @@ interface RelicsPageProps {
   matchingRelicsCount: number;
   handleMatchingRelicsCountChange: (count: number) => void;
   clearSaveFile: () => void;
+  onChangeSaveFile: (file: File) => void;
 }
 
 export function RelicsPage({
@@ -43,12 +45,25 @@ export function RelicsPage({
   setSearchTerm,
   handleMatchingRelicsCountChange,
   clearSaveFile,
+  onChangeSaveFile,
 }: RelicsPageProps) {
   const currentSlot = saveFileData?.slots[saveFileData.currentSlot];
   const navigate = useNavigate();
   const { t } = useTranslation();
 
   const [tab, setTab] = useState(TabIndex.RelicBrowser);
+  const changeFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleChangeFileSelected = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      onChangeSaveFile(file);
+    }
+    // Reset so selecting the same filename again still fires onChange.
+    event.target.value = "";
+  };
 
   // Clear save file when component unmounts (leaving /relics route)
   useEffect(() => {
@@ -137,6 +152,21 @@ export function RelicsPage({
             <Tab value={TabIndex.RelicBrowser} label={t("relicBrowserTab")} />
             <Tab value={TabIndex.DamageOptimizer} label="ダメージ最適化" />
           </Tabs>
+          <Button
+            onClick={() => changeFileInputRef.current?.click()}
+            disabled={loading}
+            color="inherit"
+            sx={{ flexShrink: 0 }}
+          >
+            {t("changeSaveFileTooltip")}
+          </Button>
+          <input
+            ref={changeFileInputRef}
+            type="file"
+            accept=".sl2"
+            onChange={handleChangeFileSelected}
+            style={{ display: "none" }}
+          />
           <Tooltip title="Close Save File">
             <IconButton
               onClick={() => navigate("/")}

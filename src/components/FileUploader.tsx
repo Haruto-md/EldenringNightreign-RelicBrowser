@@ -13,7 +13,13 @@ import {
   AlertTitle,
   Paper,
 } from "@mui/material";
-import { CloudUpload, Close, FileUpload, Clear } from "@mui/icons-material";
+import {
+  CloudUpload,
+  Close,
+  FileUpload,
+  Clear,
+  HelpOutline,
+} from "@mui/icons-material";
 
 const VisuallyHiddenInput = styled("input")({
   clip: "rect(0 0 0 0)",
@@ -192,16 +198,33 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           Close Save File
         </Button>
       ) : (
-        <Button
-          variant="contained"
-          startIcon={<CloudUpload />}
-          loading={loading}
-          onClick={() => setIsModalOpen(true)}
-          sx={{ minWidth }}
-        >
-          Open Save File
-        </Button>
+        <Stack direction="row" sx={{ alignItems: "center", gap: 0.5 }}>
+          <Button
+            variant="contained"
+            startIcon={<CloudUpload />}
+            loading={loading}
+            onClick={handleDropZoneClick}
+            sx={{ minWidth }}
+          >
+            Open Save File
+          </Button>
+          <IconButton
+            onClick={() => setIsModalOpen(true)}
+            disabled={loading}
+            aria-label="Where is my save file?"
+            title="Where is my save file?"
+          >
+            <HelpOutline />
+          </IconButton>
+        </Stack>
       )}
+
+      <VisuallyHiddenInput
+        ref={fileInputRef}
+        type="file"
+        accept=".sl2"
+        onChange={handleFileChange}
+      />
 
       <Modal
         open={isModalOpen}
@@ -252,13 +275,6 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
                 </Button>
               </Stack>
             </DropZone>
-
-            <VisuallyHiddenInput
-              ref={fileInputRef}
-              type="file"
-              accept=".sl2"
-              onChange={handleFileChange}
-            />
 
             <Paper variant="outlined" sx={{ p: 2 }}>
               {getHelperText()}

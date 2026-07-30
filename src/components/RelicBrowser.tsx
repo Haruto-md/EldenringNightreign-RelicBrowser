@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Snackbar, Stack } from "@mui/material";
+import { Alert, Box, Button, Snackbar, Stack, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Effect } from "../resources/effects";
@@ -55,8 +55,18 @@ export function RelicBrowser({
   // to narrow down to weak relics, not a requirement for selecting anything -
   // you can select any relic you can see, filtered however you like.
   const [selectionMode, setSelectionMode] = useState(false);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [copiedCount, setCopiedCount] = useState<number | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+
+  // showSelectedOnly is only meaningful while actively selecting - leaving
+  // it on across a selection-mode toggle would otherwise silently filter
+  // the next selection session down to whatever was left over.
+  useEffect(() => {
+    if (!selectionMode) {
+      setShowSelectedOnly(false);
+    }
+  }, [selectionMode]);
 
   // currentSlot is a different object reference whenever the character
   // slot switches (RelicBrowser is not remounted on a slot switch, only on
@@ -89,18 +99,36 @@ export function RelicBrowser({
       !searchTerm.trim() &&
       colorFilter.color === RelicSlotColor.Any &&
       !filterSell &&
+      !selectionMode &&
       !hasEffectFilter
     ) {
       return currentSlot.relics;
     }
 
     return currentSlot.relics.filter((relic) => {
-      const { itemId, effects, redundant } = relic;
+      const { itemId, effects, redundant, favorite, equipped } = relic;
 
       if (
-        filterSell &&
-        (redundant === undefined || unsellableItemIds.includes(itemId))
+        selectionMode &&
+        showSelectedOnly &&
+        !selectedIds.has(relic.id)
       ) {
+        return false;
+      }
+
+      // Unsellable/favorited/equipped relics can never actually be sold, so
+      // they're hidden any time the user is choosing what to sell -
+      // whether that's the "sell filter" (narrows to redundant candidates)
+      // or selection mode (manually picking relics to sell), independent
+      // toggles that can each be on without the other.
+      const cannotBeSold =
+        unsellableItemIds.includes(itemId) || favorite || equipped;
+
+      if (filterSell && (redundant === undefined || cannotBeSold)) {
+        return false;
+      }
+
+      if (selectionMode && cannotBeSold) {
         return false;
       }
 
@@ -145,10 +173,20 @@ export function RelicBrowser({
     colorFilter.color,
     colorFilter.type,
     filterSell,
+    selectionMode,
+    showSelectedOnly,
+    selectedIds,
     currentSlot.relics,
     effectFilter,
     hasEffectFilter,
   ]);
+
+  const isFiltered =
+    searchTerm.trim() !== "" ||
+    colorFilter.color !== RelicSlotColor.Any ||
+    filterSell ||
+    selectionMode ||
+    hasEffectFilter;
 
   const selectAllShown = useCallback(() => {
     setSelectedIds((prev) => {
@@ -204,6 +242,19 @@ export function RelicBrowser({
         onEffectFilterChange={setEffectFilter}
       />
 
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        {isFiltered
+          ? t("showingMatchingRelicsTemplate", {
+              matching: matchingRelics.length,
+              total: currentSlot.relics.length,
+              character: currentSlot.name ?? "",
+            })
+          : t("showingAllRelicsTemplate", {
+              total: currentSlot.relics.length,
+              character: currentSlot.name ?? "",
+            })}
+      </Typography>
+
       <Button
         variant={selectionMode ? "contained" : "outlined"}
         onClick={() => setSelectionMode((prev) => !prev)}
@@ -212,7 +263,7 @@ export function RelicBrowser({
         {selectionMode ? t("selectionModeStop") : t("selectionModeStart")}
       </Button>
 
-      {selectionMode && matchingRelics.length > 0 && (
+      {selectionMode && (matchingRelics.length > 0 || showSelectedOnly) && (
         <Stack
           direction="row"
           justifyContent="space-between"
@@ -223,6 +274,13 @@ export function RelicBrowser({
             {t("sellCandidatesTitle", { count: selectedForSale.length })}
           </Alert>
           <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant={showSelectedOnly ? "contained" : "outlined"}
+              onClick={() => setShowSelectedOnly((prev) => !prev)}
+            >
+              {t("sellCandidatesShowSelectedOnly")}
+            </Button>
             <Button size="small" onClick={selectAllShown}>
               {t("sellCandidatesSelectAll")}
             </Button>

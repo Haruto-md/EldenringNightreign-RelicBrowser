@@ -13,16 +13,25 @@
 #SingleInstance Force
 
 GameWindowTitle := "ahk_exe nightreign.exe"
-KeyDelayMs := 180
+KeyDelayMs := 100
+KeyHoldMs := 25
+DebugLog := true
+DebugLogFile := A_ScriptDir "\sell-relics-debug.log"
 
-; Send() uses SendInput mode with zero key-hold time, which many DirectInput
-; games (this one included, potentially) simply ignore. If keys aren't
-; registering in-game during manual verification, try switching to
-; SendEvent with an explicit hold time instead, e.g.:
-;   SendMode("Event")
-;   SetKeyDelay(-1, 30)
-; before the Send() calls below - this sends real timed key-down/key-up
-; events instead of a single low-level input packet.
+; SendInput (the previous default) submits a single low-level input packet
+; with zero key-hold time. This game is DirectInput-based and does not
+; reliably register those packets - some get picked up, some get dropped,
+; which cascades into the cursor drifting away from where the script thinks
+; it is (every action after a dropped press lands one - or with the Down
+; key, up to eight - cells off). Switching to SendEvent with an explicit
+; hold time sends real timed key-down/key-up events instead, which
+; DirectInput games pick up far more consistently. KeyHoldMs/KeyDelayMs are
+; deliberately generous (not the smallest values that "seem to work") since
+; a dropped press is much more costly than the automation running a little
+; slower.
+SendMode("Event")
+SetKeyDelay(-1, KeyHoldMs)
+
 ActionToKey := Map(
     "Up", "{Up}",
     "Down", "{Down}",
@@ -48,6 +57,18 @@ ParseActionArray(json) {
 ShowAbortTooltip(message) {
     ToolTip("Sell automation aborted: " message)
     SetTimer(() => ToolTip(), -2000)
+}
+
+; Appends one line per action with the tick count right before Send() and
+; right after the following Sleep(). If the script still feels unstable
+; after switching to SendEvent, this log shows whether the *script's* own
+; per-action timing is drifting (a bug here) or whether the timing is
+; regular and the instability is happening on the game's side instead.
+LogDebug(line) {
+    global DebugLog, DebugLogFile
+    if (DebugLog) {
+        FileAppend(FormatTime(, "HH:mm:ss.") A_MSec " " line "`n", DebugLogFile)
+    }
 }
 
 F9:: {
@@ -83,6 +104,7 @@ F9:: {
         return
     }
 
+    LogDebug("=== sequence start, " actions.Length " actions ===")
     for action in actions {
         if !ActionToKey.Has(action) {
             ; Unrecognized action - abort rather than send something wrong.
@@ -96,6 +118,8 @@ F9:: {
             return
         }
         Send(ActionToKey[action])
+        LogDebug(A_Index ": sent " action)
         Sleep(KeyDelayMs)
     }
+    LogDebug("=== sequence end ===")
 }

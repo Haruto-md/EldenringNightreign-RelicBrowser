@@ -1,0 +1,337 @@
+[
+  {
+    "id": "dc4da969-71d6-411b-bee4-5c135a0f0661",
+    "name": "weak",
+    "kind": "required",
+    "entries": [
+      {
+        "effectKey": 164,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 545,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 158,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 401,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 169,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 55,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 463,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 644,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 645,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 638,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 387,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 636,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 360,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 58,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 329,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 384,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 386,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 319,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 597,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 599,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 601,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 603,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 678,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 362,
+        "comparison": "atMost"
+      },
+      {
+        "effectKey": 132,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 259,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 664,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 667,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 138,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 68,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 104,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 118,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 103,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 107,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 120,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 838,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 839,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 842,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 843,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 847,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 177,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 429,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 412,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 227,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 569,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 212,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 92,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 176,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 225,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 519,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 541,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 709,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 712,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 713,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 687,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 686,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 688,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 693,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 702,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 699,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 705,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 704,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 706,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 707,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 703,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 696,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 695,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 700,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 697,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 690,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 701,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 698,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 570,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 516,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 501,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 179,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 149,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 728,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 740,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 41,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 22,
+        "comparison": "atLeast"
+      },
+      {
+        "effectKey": 739,
+        "comparison": "atLeast"
+      }
+    ]
+  }
+]

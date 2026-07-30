@@ -1,0 +1,32 @@
+PROJECT: EldenringNR-Relic (Relic Browser)
+CREATED: 2026-07-28 15:36
+UPDATED: 2026-07-29 (all items below resolved)
+WHAT WE'RE BUILDING: Relic Browserの問題点
+
+## 次にやること (すべて完了)
+- [DONE] 売ることができないものをSelect Relics to Sellで表示されないようにする。
+  -> RelicBrowser.tsx の filterSell ロジックで unsellableItemIds / favorite / equipped を除外するよう修正済み。
+- [DONE] ゲーム内にはお気に入り機能がありそれが有効になっているものも売れない
+  -> RelicSlot.favorite を追加。RelicParser.ts: id+"01000000"パターンの sortKeyLookupテーブル、
+     patternOffset+12 のバイトが 0x01 ならお気に入り。実データで229件の既存お気に入り+検証用1件を正しく検出。
+- [DONE] キャラクターに装備されているものも売れない
+  -> RelicSlot.equipped を追加。RelicParser.ts: キャラクター自身のエントリ内、
+     マーカー "e9 03 00 b0 03 00 00 00" を基準に、
+     itemBase(marker-156)のitemId配列とhandleBase(marker-28)のhandle配列(6スロット×4バイト)を読み取り、
+     handle(relic.idと同じ値、セーブ内でのみ有効)でrelicsを解決 + itemId一致でクロスチェック。
+     itemIdだけでの一致(旧実装)は同itemId重複により誤検知(1950件中193件)が出たため、
+     Opusサブエージェントに追加調査を依頼し、この instance-specific な方式に置き換えた。
+- [DONE] その他ランダムドロップではなく店売りの遺物は売れないので売れないものとされているか確認する。
+  -> items.ts の unsellableItemIds に既に実装済みだったことを確認(店売りIDのハードコードリスト
+     + uniqueItemIds、Sceneシリーズは除外)。
+
+## 変更ファイル
+- src/types/SaveFile.ts (RelicSlot.favorite, RelicSlot.equipped 追加)
+- src/utils/RelicParser.ts (favorite/equipped 判定ロジック追加)
+- src/components/RelicBrowser.tsx (filterSell に favorite/equipped 除外を追加)
+- src/utils/SellKeySequence.ts (安全網として favorite/equipped 除外を追加)
+- .gitignore (Assets/ を追加。個人セーブファイル置き場、コミットしない)
+
+## ref
+- docs\superpowers\plans\2026-07-28-relic-search-filter-shortcuts.md
+- docs\superpowers\specs\2026-07-28-relic-search-filter-shortcuts-design.md

@@ -10,6 +10,9 @@ lerna-debug.log*
 # Others
 RelicHub/*
 
+# Personal save files used for local reverse-engineering/testing
+Assets/
+
 node_modules
 dist
 dist-ssr

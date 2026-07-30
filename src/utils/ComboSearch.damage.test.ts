@@ -6,7 +6,10 @@ import { EffectKey } from "../resources/effectKeys.js";
 import { type Effect } from "../resources/effects";
 import type { RelicSlot } from "../types/SaveFile";
 import { buildWasmInput } from "../workers/comboSearchWorker.js";
-import { buildDamageWorkerInput, cancelCurrentSearch } from "./ComboSearch.js";
+import {
+  buildDamageWorkerInput,
+  cancelCurrentSearch,
+} from "./ComboSearch.js";
 import { EFFECT_KEY_ARRAY_LENGTH } from "./DamageMultiplierArray";
 import { getEffectByKey } from "./DataUtils";
 import { Nightfarer } from "./Nightfarers";
@@ -227,5 +230,59 @@ describe("ComboSearch damage mode", () => {
       });
       expect(hasRequiredEffect).toBe(true);
     }
+  });
+
+  it("keeps the damage-mode candidate set small even with thousands of irrelevant filler relics", () => {
+    // Regression test: buildDamageWorkerInput used to pass through every
+    // color-eligible relic unfiltered (damage mode has no "selected effects"
+    // to narrow by), relying on a WASM-side candidate bitmap that
+    // search_group_triples never actually consulted for enumeration. Because
+    // search_group_triples enumerates candidates cubically per color group,
+    // a real inventory (thousands of relics) made the search run for tens of
+    // seconds and eventually crash (hashbrown allocation failure) instead of
+    // completing. Only relics carrying a multiplier>1 effect or a must-have
+    // effect should count as real candidates; everything else may only
+    // appear as a small, capped gap-filler.
+    const meleeEffect = getEffectByKey(EffectKey.improvedMeleeAttackPower);
+    assert(meleeEffect !== undefined);
+    const irrelevantEffect = getEffectByKey(EffectKey.strengthPlus1);
+    assert(irrelevantEffect !== undefined);
+
+    const RED_ITEM_ID = 102;
+
+    const normalRelics: RelicSlot[] = [
+      makeRelic(RED_ITEM_ID, meleeEffect),
+      ...Array.from({ length: 3000 }, () =>
+        makeRelic(RED_ITEM_ID, irrelevantEffect)
+      ),
+    ];
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+    multiplierArray[EffectKey.improvedMeleeAttackPower] = 1.05;
+
+    const workerInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      normalRelics,
+      [],
+      [vessel],
+      multiplierArray,
+      []
+    );
+
+    // 1 real candidate + a capped gap-filler batch (at most 10 per color),
+    // not all 3001 relics.
+    expect(workerInput.relics.length).toBeLessThanOrEqual(11);
   });
 });

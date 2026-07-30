@@ -1,6 +1,5 @@
 import { Box, CssBaseline, ThemeProvider } from "@mui/material";
 import { Route, Routes, useNavigate } from "react-router-dom";
-import { DebugMenu } from "./components/DebugMenu";
 import { FileUploader } from "./components/FileUploader";
 import { Footer } from "./components/Footer";
 import { RelicsPage } from "./components/RelicsPage";
@@ -79,6 +78,7 @@ function App() {
                   matchingRelicsCount={matchingRelicsCount}
                   handleMatchingRelicsCountChange={setMatchingRelicsCount}
                   clearSaveFile={clearSaveFile}
+                  onChangeSaveFile={loadSaveFile}
                 />
               }
             />
@@ -87,15 +87,6 @@ function App() {
           <Footer />
         </Box>
       </Box>
-
-      {import.meta.env.DEV && (
-        <Box sx={{ position: "fixed", top: 0, right: 0, p: 1 }}>
-          <DebugMenu
-            bnd4Entries={saveFileData?.bnd4Entries}
-            disabled={loading || !saveFileData}
-          />
-        </Box>
-      )}
     </ThemeProvider>
   );
 }

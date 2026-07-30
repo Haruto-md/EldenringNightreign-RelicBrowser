@@ -34,6 +34,9 @@ export function EffectFilterChip({
         bgcolor: "action.hover",
       }}
     >
+      <IconButton size="small" onClick={onRemove} sx={{ p: 0.25 }} aria-label={`Remove ${label}`}>
+        <CloseIcon fontSize="inherit" />
+      </IconButton>
       {showToggle && (
         <Tooltip
           title={
@@ -52,9 +55,6 @@ export function EffectFilterChip({
         </Tooltip>
       )}
       <Typography variant="body2">{label}</Typography>
-      <IconButton size="small" onClick={onRemove} sx={{ p: 0.25 }} aria-label={`Remove ${label}`}>
-        <CloseIcon fontSize="inherit" />
-      </IconButton>
     </Box>
   );
 }

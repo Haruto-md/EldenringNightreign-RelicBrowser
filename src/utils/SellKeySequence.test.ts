@@ -60,6 +60,31 @@ describe("buildSellKeySequence", () => {
     ).toEqual(["Right", "Right", "Right", "Right", "Right", "Right", "Select", "Right", "Right", "Select", "Confirm"]);
   });
 
+  it("uses Down presses to cover 8-cell jumps instead of 8 individual Rights", () => {
+    // [3,0] -> linear index 24, straight down 3 rows in the same column.
+    expect(buildSellKeySequence([makeCandidate(3, 0)])).toEqual([
+      "Down",
+      "Down",
+      "Down",
+      "Select",
+      "Confirm",
+    ]);
+  });
+
+  it("combines Down and Right for a jump that isn't a multiple of 8", () => {
+    // [3,3] -> linear index 27 = 3*8 + 3, so 3 Downs then 3 Rights.
+    expect(buildSellKeySequence([makeCandidate(3, 3)])).toEqual([
+      "Down",
+      "Down",
+      "Down",
+      "Right",
+      "Right",
+      "Right",
+      "Select",
+      "Confirm",
+    ]);
+  });
+
   it("filters out unsellable item ids as a hard safety net", () => {
     const unsellableId = unsellableItemIds[0];
     const sequence = buildSellKeySequence([

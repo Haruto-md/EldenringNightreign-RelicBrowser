@@ -23,6 +23,8 @@ export interface RelicSlot {
   coordinates: [row: number, column: number];
   coordinatesByColor: [row: number, column: number];
   sortKey?: number;
+  favorite?: boolean;
+  equipped?: boolean;
   idBytes?: Uint8Array;
   redundant?: { relic: RelicSlot; outclassed: boolean };
   byteOffset?: number;

@@ -646,13 +646,37 @@ export const uniqueItemIds: number[] = itemsArray
   )
   .flatMap(({ ids }) => ids);
 
-// relics bought from shops
-export const unsellableItemIds = [
-  1520, 1050, 1040, 1030, 1020, 1010, 1000, 1100, 1090, 1060, 1170, 1160, 1150,
-  1140, 1130, 1120, 1260, 1270, 1240, 1480, 1460, 1430, 1420, 1400, 1450, 1500,
-  1490, 1440, 1510, 1250, 1210, 1200, 1180, 1230, 1220, 1190, 1070, 1110, 1080,
-  1410, 1470,
+// The Small Jar Bazaar sells "Scenic Flatstone"/"Grand Scenic Flatstone"
+// items that transform into a random Scene-type relic
+// (https://eldenringnightreign.wiki.fextralife.com/Small+Jar+Bazaar) -
+// those purchased relics get their own itemIds, distinct from the same
+// relic found normally, and can't be sold back. Every shop-origin id found
+// so far falls in the 1000-1999 range, cleanly separated from normal drop
+// ids (<1000), recolor-variant ids (11000-24999), and per-Nightfarer
+// combinatorial ids (1000000+) for these same items - so instead of a
+// hand-curated list of specific numbers (which silently went stale: it was
+// missing every "grand" tier id added by a later shop restock/patch, e.g.
+// grandBurningScene's 1650/1660/1710/1720/1850/1860/1900), derive it
+// directly from itemsArray so ids in this same range are picked up
+// automatically even if the shop's catalog grows further.
+const SHOP_SCENE_KEYS = [
+  "delicateBurningScene",
+  "delicateDrizzlyScene",
+  "delicateLuminousScene",
+  "delicateTranquilScene",
+  "polishedBurningScene",
+  "polishedDrizzlyScene",
+  "polishedLuminousScene",
+  "polishedTranquilScene",
+  "grandBurningScene",
+  "grandDrizzlyScene",
+  "grandLuminousScene",
+  "grandTranquilScene",
 ];
+
+export const unsellableItemIds: number[] = itemsArray
+  .filter((item) => SHOP_SCENE_KEYS.includes(item.key))
+  .flatMap((item) => item.ids.filter((id) => id >= 1000 && id <= 1999));
 unsellableItemIds.push(...uniqueItemIds);
 
 export const items: Map<number, Item> = new Map();

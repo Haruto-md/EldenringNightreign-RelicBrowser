@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  assignCategoriesAndRanks,
   buildJpnToEngLookup,
   extractEffectKeyNames,
   extractI18nEnglishEffectStrings,
@@ -36,7 +37,10 @@ describe("buildJpnToEngLookup", () => {
 
   it("skips entries missing jpn or eng", () => {
     const lookup = buildJpnToEngLookup([
-      [{ jpn: "", eng: "x" }, { jpn: "y", eng: "" }],
+      [
+        { jpn: "", eng: "x" },
+        { jpn: "y", eng: "" },
+      ],
     ]);
     expect(lookup.size).toBe(0);
   });
@@ -69,14 +73,68 @@ export const resources = {
   });
 });
 
+describe("assignCategoriesAndRanks", () => {
+  const jpnToEng = new Map([
+    ["生命力+1", "Vigor +1"],
+    ["生命力+2", "Vigor +2"],
+    ["精神力+1", "Mind +1"],
+  ]);
+  const englishToEffectKeyName = new Map([
+    ["Vigor +1", "vigorPlus1"],
+    ["Vigor +2", "vigorPlus2"],
+    ["Mind +1", "mindPlus1"],
+  ]);
+  const skillsByGenre = {
+    能力値: [
+      { jpn: "生命力+1", eng: "Vigor +1" },
+      { jpn: "生命力+2", eng: "Vigor +2" },
+      { jpn: "精神力+1", eng: "Mind +1" },
+      { jpn: "未知の効果", eng: "Unknown effect" },
+    ],
+  };
+
+  it("assigns each matched entry its genre and its index within that genre's array", () => {
+    const { categoryOfKeyName, rankOfKeyName, unmatched } =
+      assignCategoriesAndRanks(
+        ["能力値"],
+        skillsByGenre,
+        jpnToEng,
+        englishToEffectKeyName,
+        {}
+      );
+    expect(categoryOfKeyName.get("vigorPlus1")).toBe("能力値");
+    expect(rankOfKeyName.get("vigorPlus1")).toBe(0);
+    expect(rankOfKeyName.get("vigorPlus2")).toBe(1);
+    expect(rankOfKeyName.get("mindPlus1")).toBe(2);
+    expect(unmatched).toEqual(["能力値: 未知の効果 (Unknown effect)"]);
+  });
+
+  it("first genre entry wins when the same EffectKey appears twice", () => {
+    const { rankOfKeyName } = assignCategoriesAndRanks(
+      ["能力値"],
+      {
+        能力値: [
+          { jpn: "精神力+1", eng: "Mind +1" },
+          { jpn: "生命力+1", eng: "Vigor +1" },
+          { jpn: "生命力+1", eng: "Vigor +1" }, // duplicate, should not overwrite rank 0's claim
+        ],
+      },
+      jpnToEng,
+      englishToEffectKeyName,
+      {}
+    );
+    expect(rankOfKeyName.get("vigorPlus1")).toBe(1);
+  });
+});
+
 describe("matchEffectKeyName", () => {
   const jpnToEng = new Map([["生命力+1", "Vigor +1"]]);
   const englishToEffectKeyName = new Map([["Vigor +1", "vigorPlus1"]]);
 
   it("resolves via the jpn -> eng -> EffectKey chain", () => {
-    expect(matchEffectKeyName("生命力+1", jpnToEng, englishToEffectKeyName, {})).toBe(
-      "vigorPlus1"
-    );
+    expect(
+      matchEffectKeyName("生命力+1", jpnToEng, englishToEffectKeyName, {})
+    ).toBe("vigorPlus1");
   });
 
   it("prefers an explicit override", () => {
@@ -88,6 +146,8 @@ describe("matchEffectKeyName", () => {
   });
 
   it("returns undefined when the jpn name has no eng mapping", () => {
-    expect(matchEffectKeyName("未知の効果", jpnToEng, englishToEffectKeyName, {})).toBeUndefined();
+    expect(
+      matchEffectKeyName("未知の効果", jpnToEng, englishToEffectKeyName, {})
+    ).toBeUndefined();
   });
 });

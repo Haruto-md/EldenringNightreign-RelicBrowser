@@ -342,14 +342,21 @@ function filterRelics(
   return filteredRelics;
 }
 
-// Damage-mode candidate filtering: keep any relic of a color used by an enabled
-// vessel slot, without requiring it to have a "selected" effect (damage mode has
-// no selected-effects concept). WASM's own candidate-bitmap logic (multiplier > 1.0)
-// narrows further.
-function filterRelicsByColor(
+// Damage-mode candidate filtering: keep only relics of a color used by an
+// enabled vessel slot AND carrying an effect that actually matters for
+// scoring (a damage multiplier > 1.0) or is named by a must-have range —
+// mirroring filterRelics' effect-based narrowing above. WASM's
+// search_group_triples enumerates candidates cubically per color group
+// (anchor x other-slot x other-slot), so without this narrowing a full
+// relic inventory (hundreds-to-thousands of relics) makes the search run
+// effectively forever / exhaust memory. Gap-fill so vessel slots without a
+// scoring candidate of their color can still be completed with a filler.
+function filterRelicsForDamage(
   relics: RelicSlot[],
   enabledVessels: Vessel[],
-  deepRelics: boolean
+  deepRelics: boolean,
+  multiplierArray: Float32Array,
+  mustHaveEffectKeys: number[]
 ): RelicSlot[] {
   const vesselSlotIndices = deepRelics ? [3, 4, 5] : [0, 1, 2];
   const enabledRelicColors = new Set(
@@ -357,8 +364,11 @@ function filterRelicsByColor(
       enabledVessels.map((v) => v.slots[index])
     )
   );
+  const mustHaveKeySet = new Set(mustHaveEffectKeys);
+  const isRelevantEffectKey = (key: number): boolean =>
+    multiplierArray[key] > 1 || mustHaveKeySet.has(key);
 
-  return relics.filter((relic) => {
+  const filteredRelics = relics.filter((relic) => {
     const item = items.get(relic.itemId);
     if (
       item === undefined ||
@@ -368,8 +378,32 @@ function filterRelicsByColor(
     ) {
       return false;
     }
-    return true;
+    return relic.effects.some(
+      ([effect, debuff]) =>
+        isRelevantEffectKey(effect.key) ||
+        (debuff !== undefined && isRelevantEffectKey(debuff.key))
+    );
   });
+
+  const relicsByColor = sortRelicsByColor(filteredRelics);
+  Object.entries(relicsByColor).forEach(([color, filteredRelicsByColor]) => {
+    const candidates = relics
+      .filter((relic) => {
+        const item = items.get(relic.itemId);
+        return (
+          item?.color === Number(color) &&
+          !filteredRelicsByColor.includes(relic)
+        );
+      })
+      .map((relic) => ({ relic, effectCount: relic.effects.length }));
+
+    candidates.sort((a, b) => b.effectCount - a.effectCount);
+
+    const gapFillerRelics = candidates.slice(0, 10).map((c) => c.relic);
+    filteredRelics.push(...gapFillerRelics);
+  });
+
+  return filteredRelics;
 }
 
 function filterRecommendedEffects(
@@ -436,12 +470,27 @@ export function buildDamageWorkerInput(
   excludedDemeritKeys: number[],
   effectRanges: SelectedEffectEntry[] = []
 ): ComboSearchWorkerInput {
+  const mustHaveEffectKeys = effectRanges
+    .filter(({ minStacks }) => minStacks > 0)
+    .map(({ effectKey }) => effectKey);
   return {
     nightfarer,
     selectedEffects: [],
     recommendedEffects: [],
-    relics: filterRelicsByColor(normalRelics, enabledVessels, false),
-    deepRelics: filterRelicsByColor(deepRelics, enabledVessels, true),
+    relics: filterRelicsForDamage(
+      normalRelics,
+      enabledVessels,
+      false,
+      multiplierArray,
+      mustHaveEffectKeys
+    ),
+    deepRelics: filterRelicsForDamage(
+      deepRelics,
+      enabledVessels,
+      true,
+      multiplierArray,
+      mustHaveEffectKeys
+    ),
     enabledVessels,
     selectedEffectRanges: effectRanges,
     damageMultipliers: Array.from(multiplierArray),

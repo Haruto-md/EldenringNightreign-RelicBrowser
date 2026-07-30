@@ -243,6 +243,12 @@ export class RelicParser {
           sortKeyOffset + 10
         );
         slot.sortKey = this.readIntLE(sortKeyBytes);
+        // Byte at +12 (2 bytes past the sortKey field, after a 2-byte gap)
+        // is 0x01 only for the one relic that was favorited in-game, 0x00
+        // otherwise - confirmed by diffing paired save files with a single
+        // relic's favorite toggled and comparing this same id+sortKey
+        // lookup record across saves.
+        slot.favorite = currentEntry[sortKeyOffset + 12] === 0x01;
         validSlots.push(slot as RelicSlot);
       } else {
         // maybe the relic was sold?!
@@ -303,6 +309,79 @@ export class RelicParser {
     }
 
     return relics;
+  }
+
+  /**
+   * The equipped-vessel-slot table lives in the character's own entry (the
+   * same entry its relics are parsed from), as two parallel 6-slot arrays
+   * 128 bytes apart: an itemId array (uint32 LE per slot, 0xffffffff when
+   * empty) and, 128 bytes later, a "handle" array (uint32 LE per slot,
+   * 0x00000000 when empty) whose value is byte-identical to the equipped
+   * relic's own `id`/`idBytes` in *this same save* - unlike `id` itself,
+   * which is regenerated on every save and unusable across saves, this
+   * lets us resolve the exact relic instance within one parse. A fixed
+   * marker immediately follows both arrays and anchors them without
+   * depending on inventory size shifting absolute offsets. Found by
+   * diffing paired save files (nothing equipped vs specific relics
+   * equipped) and confirmed on multiple independent save files - matching
+   * by itemId alone (no handle) produced ~10% false positives whenever the
+   * player owned multiple relics of the same type.
+   */
+  private static readonly EQUIP_MARKER = "e903 00b0 0300 0000";
+  private static readonly EQUIP_ITEM_ARRAY_OFFSET = -156;
+  private static readonly EQUIP_HANDLE_ARRAY_OFFSET = -28;
+  private static readonly EQUIP_SLOT_COUNT = 6;
+  private static readonly EQUIP_SLOT_SIZE = 4;
+
+  /**
+   * Marks `relics` whose `id` matches an equipped-slot handle as
+   * `equipped`, cross-checking each match's `itemId` against the parallel
+   * itemId array as a safety net against a coincidental handle collision.
+   */
+  private static markEquippedRelics(
+    currentEntry: Uint8Array,
+    relics: RelicSlot[]
+  ): void {
+    const markerOffset = this.findHexOffset(currentEntry, this.EQUIP_MARKER);
+    if (markerOffset === null) {
+      return;
+    }
+
+    const itemBase = markerOffset + this.EQUIP_ITEM_ARRAY_OFFSET;
+    const handleBase = markerOffset + this.EQUIP_HANDLE_ARRAY_OFFSET;
+    const relicsById = new Map(relics.map((relic) => [relic.id, relic]));
+
+    for (let slot = 0; slot < this.EQUIP_SLOT_COUNT; slot++) {
+      const handleBytes = currentEntry.slice(
+        handleBase + slot * this.EQUIP_SLOT_SIZE,
+        handleBase + slot * this.EQUIP_SLOT_SIZE + this.EQUIP_SLOT_SIZE
+      );
+      if (handleBytes.length < this.EQUIP_SLOT_SIZE) {
+        continue;
+      }
+      const handle = this.readIntLE(handleBytes) >>> 0;
+      if (handle === 0 || handle === 0xffffffff) {
+        continue;
+      }
+
+      const relic = relicsById.get(handle);
+      if (!relic) {
+        continue;
+      }
+
+      const itemIdBytes = currentEntry.slice(
+        itemBase + slot * this.EQUIP_SLOT_SIZE,
+        itemBase + slot * this.EQUIP_SLOT_SIZE + 3
+      );
+      if (itemIdBytes.length < 3) {
+        continue;
+      }
+      if (this.readIntLE(itemIdBytes) !== relic.itemId) {
+        continue;
+      }
+
+      relic.equipped = true;
+    }
   }
 
   public static getNames(bnd4Entry: BND4Entry): Uint8Array<ArrayBuffer>[] {
@@ -421,15 +500,22 @@ export class RelicParser {
       };
     }
 
-    // Parse relics using the same parameters as Python version
+    // Parse relics using the same parameters as Python version. Start the
+    // scan window at 0, not some small positive offset - a save file has
+    // been found where a real relic's slot begins at absolute offset 24,
+    // which a previous, larger start offset (32) silently excluded from
+    // the scan entirely (not a slot-validity rejection - the byte simply
+    // wasn't in the scanned window), dropping one relic and shifting every
+    // later relic's "Order Found" position by one.
     const baseRelics = this.parseRelics(
       currentEntry.cleanData,
-      32,
+      0,
       fixedPatternOffset - 100,
       fixedPatternOffsetEnd
     );
 
     const relics = this.setCoordinates(baseRelics);
+    this.markEquippedRelics(currentEntry.cleanData, relics);
 
     return {
       name,
