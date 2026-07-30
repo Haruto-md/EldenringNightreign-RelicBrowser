@@ -1,4 +1,6 @@
 import DeleteIcon from "@mui/icons-material/Delete";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import {
   Alert,
   Box,
@@ -18,6 +20,7 @@ import {
   type SelectChangeEvent,
   Stack,
   Switch,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -706,7 +709,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
       {/* Left panel: controls */}
       <Box
         sx={{
-          width: "360px",
+          width: "420px",
           flexShrink: 0,
           maxHeight: "100%",
           display: "flex",
@@ -832,51 +835,80 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
               placeholder="効果を検索..."
               getLabel={(key) => effectNameJa(key)}
               clearOnSelect
+              groupByCategory
             />
             {current.mustHaves.length > 0 && (
-              <Stack sx={{ mt: 1, maxHeight: 260, overflowY: "auto" }}>
+              <Stack spacing={1} sx={{ mt: 1, maxHeight: 320, overflowY: "auto" }}>
                 {current.mustHaves.map((mustHave) => (
-                  <Box
-                    key={mustHave.effectKey}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      py: 0.5,
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      sx={{ flex: 1, minWidth: 0 }}
-                      noWrap
+                  <Card key={mustHave.effectKey} elevation={2}>
+                    <CardContent
+                      sx={{ px: 1.5, py: 0.5, "&:last-child": { paddingBottom: 0.5 } }}
                     >
-                      {effectNameJa(mustHave.effectKey as EffectKey)}
-                    </Typography>
-                    <FormControl size="small" sx={{ minWidth: 72 }}>
-                      <Select
-                        value={String(mustHave.minStacks)}
-                        onChange={(e) =>
-                          setMustHaveMinStacks(
-                            mustHave.effectKey,
-                            Number(e.target.value)
-                          )
-                        }
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        sx={{ mb: 0.5 }}
                       >
-                        {MIN_STACKS_OPTIONS.map((n) => (
-                          <MenuItem key={n} value={String(n)}>
-                            {n}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <IconButton
-                      size="small"
-                      aria-label="削除"
-                      onClick={() => removeMustHave(mustHave.effectKey)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
+                        {effectNameJa(mustHave.effectKey as EffectKey)}
+                      </Typography>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="flex-end"
+                        spacing={0.5}
+                      >
+                        <Tooltip
+                          title={
+                            mustHave.comparison === "atLeast"
+                              ? "この数値以上（クリックで「以下」に切り替え）"
+                              : "この数値以下（クリックで「以上」に切り替え）"
+                          }
+                        >
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              setMustHaveComparison(
+                                mustHave.effectKey,
+                                mustHave.comparison === "atLeast"
+                                  ? "atMost"
+                                  : "atLeast"
+                              )
+                            }
+                          >
+                            {mustHave.comparison === "atLeast" ? (
+                              <KeyboardArrowUpIcon fontSize="small" />
+                            ) : (
+                              <KeyboardArrowDownIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                        <FormControl size="small" sx={{ minWidth: 72 }}>
+                          <Select
+                            value={String(mustHave.stacks)}
+                            onChange={(e) =>
+                              setMustHaveStacks(
+                                mustHave.effectKey,
+                                Number(e.target.value)
+                              )
+                            }
+                          >
+                            {MIN_STACKS_OPTIONS.map((n) => (
+                              <MenuItem key={n} value={String(n)}>
+                                {n}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <IconButton
+                          size="small"
+                          aria-label="削除"
+                          onClick={() => removeMustHave(mustHave.effectKey)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </CardContent>
+                  </Card>
                 ))}
               </Stack>
             )}
