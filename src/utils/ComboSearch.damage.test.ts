@@ -340,4 +340,140 @@ describe("ComboSearch damage mode", () => {
     expect(workerInput.relics.length).toBeLessThanOrEqual(61);
     expect(workerInput.relics.length).toBeGreaterThan(11);
   });
+
+  it("a must-have on a lower tier is satisfied by a relic carrying only the higher tier", () => {
+    // Regression test: a must-have of "物理攻撃力上昇+3" (physicalAttackUpPlus3)
+    // must also be satisfied by a relic carrying only "+4" of the same
+    // stackable group (physicalAttackUpPlus4) — the higher tier is strictly
+    // better, so it must count as candidate-eligible AND toward the final
+    // search result, the same way the Relic Browser's combo search already
+    // treats tiers via getStackableHigherLevelEffects/relicHasEffect.
+    const plus3 = getEffectByKey(EffectKey.physicalAttackUpPlus3);
+    const plus4 = getEffectByKey(EffectKey.physicalAttackUpPlus4);
+    const filler = getEffectByKey(EffectKey.strengthPlus1);
+    assert(plus3 !== undefined);
+    assert(plus4 !== undefined);
+    assert(filler !== undefined);
+
+    const RED_ITEM_ID = 102;
+    // Neither tier carries a damage multiplier in this test's array, so the
+    // relic can only become a candidate via the must-have tier match, not
+    // via the scoring-relic path.
+    const higherTierRelic = makeRelic(RED_ITEM_ID, plus4);
+    const fillerRelics = Array.from({ length: 10 }, () =>
+      makeRelic(RED_ITEM_ID, filler)
+    );
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+
+    const workerInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      [higherTierRelic, ...fillerRelics],
+      [],
+      [vessel],
+      multiplierArray,
+      [],
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6 }]
+    );
+
+    // Candidate widening: the +4-only relic must not be filtered out before
+    // the WASM search ever sees it (it's counted as "relevant", not just a
+    // capped gap-filler).
+    expect(
+      workerInput.relics.some((r) =>
+        r.effects.some(([e]) => e.key === EffectKey.physicalAttackUpPlus4)
+      )
+    ).toBe(true);
+
+    const wasmInput = buildWasmInput(workerInput);
+    const output = search_combinations(wasmInput) as {
+      combinations: unknown[];
+      total_combinations_checked: number;
+    };
+
+    // Final range check: a full combination built from six copies of the
+    // +4-only relic must be accepted as satisfying "at least 1 of +3".
+    expect(output.combinations.length).toBeGreaterThan(0);
+  });
+
+  it("a higher-tier must-have match survives WASM top-K pruning against many exact-key fillers", { timeout: 30000 }, () => {
+    // Regression test for the compiled artifact: the WASM search's per-color
+    // top-K pruning (search_group_triples) ranks triples partly by how many
+    // distinct must-have keys they cover, to protect a must-have relic with
+    // no damage multiplier from being evicted by higher-scoring fillers
+    // before the final range check runs. That coverage check used to match
+    // by exact effect key only, so a triple satisfying the requirement
+    // solely via a same-group higher tier (physicalAttackUpPlus4 satisfying
+    // a must-have on physicalAttackUpPlus3) would score 0 coverage — tying
+    // fillers that don't satisfy the requirement at all, but outscore it on
+    // real damage points, could evict the only qualifying relic before the
+    // final range check ever runs. This exercises that scenario against the
+    // real compiled combo_search.wasm, not just the internal Rust function.
+    const plus3 = getEffectByKey(EffectKey.physicalAttackUpPlus3);
+    const plus4 = getEffectByKey(EffectKey.physicalAttackUpPlus4);
+    const meleeEffect = getEffectByKey(EffectKey.improvedMeleeAttackPower);
+    assert(plus3 !== undefined);
+    assert(plus4 !== undefined);
+    assert(meleeEffect !== undefined);
+
+    const RED_ITEM_ID = 102;
+    // Fillers carry an unrelated effect with a real damage multiplier —
+    // they don't satisfy the plus3 must-have at all (exact or tier), but
+    // outscore the tiered relic on points, so only the coverage-priority
+    // bonus can save the tiered relic's triple from eviction.
+    const fillerRelics = Array.from({ length: 260 }, () =>
+      makeRelic(RED_ITEM_ID, meleeEffect)
+    );
+    const higherTierRelic = makeRelic(RED_ITEM_ID, plus4);
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+    multiplierArray[EffectKey.improvedMeleeAttackPower] = 1.05;
+
+    const workerInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      [higherTierRelic, ...fillerRelics],
+      [],
+      [vessel],
+      multiplierArray,
+      [],
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6 }]
+    );
+
+    // All 261 relics are "relevant" (fillers via the real multiplier, the
+    // tiered relic via the must-have tier match), so none are subject to
+    // the capped gap-filler path — the full pool reaches WASM, which is
+    // what actually exercises top-K pruning.
+    expect(workerInput.relics.length).toBe(261);
+
+    const wasmInput = buildWasmInput(workerInput);
+    const output = search_combinations(wasmInput) as {
+      combinations: unknown[];
+    };
+
+    expect(output.combinations.length).toBeGreaterThan(0);
+  });
 });

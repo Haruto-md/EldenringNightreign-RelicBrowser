@@ -1,5 +1,5 @@
 import type { EffectKey } from "../resources/effectKeys";
-import type { Effect } from "../resources/effects";
+import { isSameGroupAndEqualOrBetter, type Effect } from "../resources/effects";
 import { items } from "../resources/items";
 import type { RelicSlot } from "../types/SaveFile";
 import type {
@@ -7,7 +7,11 @@ import type {
   ComboSearchWorkerInput,
   ComboSearchWorkerMessage,
 } from "../workers/comboSearchWorker";
-import { getStackableHigherLevelEffects, relicHasEffect } from "./DataUtils";
+import {
+  getEffectByKey,
+  getStackableHigherLevelEffects,
+  relicHasEffect,
+} from "./DataUtils";
 import { Nightfarer } from "./Nightfarers";
 import { recommendedEffectsByCharacter } from "./RecommendedEffects";
 import { RelicSlotColor } from "./RelicColor";
@@ -402,7 +406,7 @@ function filterRelicsForDamage(
   enabledVessels: Vessel[],
   deepRelics: boolean,
   multiplierArray: Float32Array,
-  mustHaveEffectKeys: number[],
+  mustHaveEffects: Effect[],
   restrictToScoring: boolean
 ): RelicSlot[] {
   const vesselSlotIndices = deepRelics ? [3, 4, 5] : [0, 1, 2];
@@ -411,9 +415,18 @@ function filterRelicsForDamage(
       enabledVessels.map((v) => v.slots[index])
     )
   );
-  const mustHaveKeySet = new Set(mustHaveEffectKeys);
-  const isRelevantEffectKey = (key: number): boolean =>
-    multiplierArray[key] > 1 || mustHaveKeySet.has(key);
+  // A relic satisfies a must-have not only by carrying its exact effect key,
+  // but also by carrying a same-group, equal-or-higher-tier stackable effect
+  // (e.g. a must-have on "物理攻撃力上昇+3" is also satisfied by "+4") —
+  // matching how the final WASM range check (combination_satisfies_ranges)
+  // treats tiers, so a relic that only clears the bar via a higher tier isn't
+  // excluded from candidacy before that check ever sees it.
+  const isRelevantEffect = (effect: Effect): boolean =>
+    multiplierArray[effect.key] > 1 ||
+    mustHaveEffects.some(
+      (required) =>
+        effect === required || isSameGroupAndEqualOrBetter(required, effect)
+    );
 
   const colorEligible = (relic: RelicSlot): boolean => {
     const item = items.get(relic.itemId);
@@ -431,8 +444,8 @@ function filterRelicsForDamage(
     }
     return relic.effects.some(
       ([effect, debuff]) =>
-        isRelevantEffectKey(effect.key) ||
-        (debuff !== undefined && isRelevantEffectKey(debuff.key))
+        isRelevantEffect(effect) ||
+        (debuff !== undefined && isRelevantEffect(debuff))
     );
   });
 
@@ -528,19 +541,28 @@ export function buildDamageWorkerInput(
   effectRanges: SelectedEffectEntry[] = [],
   restrictToScoringRelics: boolean = true
 ): ComboSearchWorkerInput {
-  const mustHaveEffectKeys = effectRanges
+  // Every range's own effect (with its group/level), so the WASM final range
+  // check (combination_satisfies_ranges) can treat a same-group, higher-tier
+  // relic effect as satisfying a lower-tier must-have, for both atLeast and
+  // atMost. Only min_stacks>0 ranges additionally widen candidate eligibility
+  // below — an atMost-only range shouldn't force extra relics into the pool.
+  const rangeEffects = effectRanges
+    .map(({ effectKey }) => getEffectByKey(effectKey as EffectKey))
+    .filter((effect): effect is Effect => effect !== undefined);
+  const mustHaveEffects = effectRanges
     .filter(({ minStacks }) => minStacks > 0)
-    .map(({ effectKey }) => effectKey);
+    .map(({ effectKey }) => getEffectByKey(effectKey as EffectKey))
+    .filter((effect): effect is Effect => effect !== undefined);
   return {
     nightfarer,
-    selectedEffects: [],
+    selectedEffects: rangeEffects,
     recommendedEffects: [],
     relics: filterRelicsForDamage(
       normalRelics,
       enabledVessels,
       false,
       multiplierArray,
-      mustHaveEffectKeys,
+      mustHaveEffects,
       restrictToScoringRelics
     ),
     deepRelics: filterRelicsForDamage(
@@ -548,7 +570,7 @@ export function buildDamageWorkerInput(
       enabledVessels,
       true,
       multiplierArray,
-      mustHaveEffectKeys,
+      mustHaveEffects,
       restrictToScoringRelics
     ),
     enabledVessels,

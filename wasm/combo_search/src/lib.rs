@@ -444,12 +444,38 @@ fn combination_satisfies_ranges(
     true
 }
 
+// True if `effect` satisfies required `key`, either by exact match or by
+// being a same-group, equal-or-higher stackable tier of it (mirroring
+// combination_satisfies_ranges' final-check semantics exactly, so the
+// pruning-bonus below can never rank a tier-satisfying triple lower than
+// the check that ultimately decides whether a full combination is valid).
+#[inline(always)]
+fn effect_satisfies_key(
+    effect: &Effect,
+    key: u32,
+    selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+) -> bool {
+    if effect.key == key { return true; }
+    let k_usize = key as usize;
+    if k_usize >= EFFECT_KEY_SPACE { return false; }
+    let sel_g = unsafe { *selected_groups_by_key.get_unchecked(k_usize) };
+    let sel_l = unsafe { *selected_levels_by_key.get_unchecked(k_usize) };
+    if sel_g == u8::MAX || sel_l == u8::MAX { return false; }
+    if let (Some(eg), Some(el)) = (effect.group, effect.level) {
+        effect.stacks.unwrap_or(false) && eg == sel_g && el >= sel_l
+    } else {
+        false
+    }
+}
+
 // Number of DISTINCT required-must-have keys (from `range_keys`) carried by
 // any slotted relic in this partial 6-combo, respecting the nightfarer gate
-// the same way combination_satisfies_ranges does. A plain "carries any
-// must-have" boolean can't tell a triple that covers two different required
-// keys (needed together to satisfy both) from one that only covers a single
-// key - see triple_key_less below for why that distinction matters.
+// and the same-group-higher-tier match the same way combination_satisfies_ranges
+// does. A plain "carries any must-have" boolean can't tell a triple that
+// covers two different required keys (needed together to satisfy both) from
+// one that only covers a single key - see triple_key_less below for why that
+// distinction matters.
 #[inline(always)]
 fn triple_covered_key_count(
     indices6: &[Option<usize>; 6],
@@ -457,6 +483,8 @@ fn triple_covered_key_count(
     relics_deep: &[RelicSlot],
     nightfarer: u8,
     range_keys: &[u32],
+    selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> u8 {
     let mut covered = 0u8;
     for &key in range_keys {
@@ -465,7 +493,7 @@ fn triple_covered_key_count(
                 let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } } else { unsafe { relics_deep.get_unchecked(*idx) } };
                 let found = relic.effects.iter().any(|effect| {
                     if let Some(nf) = effect.nightfarer { if nf != nightfarer { return false; } }
-                    effect.key == key
+                    effect_satisfies_key(effect, key, selected_groups_by_key, selected_levels_by_key)
                 });
                 if found { covered += 1; break; }
             }
@@ -500,6 +528,8 @@ fn search_group_triples(
     damage_mults: &[f32],
     excluded_demerits: &[u32],
     range_keys: &[u32],
+    selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> (Vec<([Option<usize>;3], f32, u8)>, u32) {
     let mut local_results: Vec<([Option<usize>;3], f32, u8)> = Vec::with_capacity(TOP_GROUP_RESULTS);
     let mut local_seen: HashSet<u32> = HashSet::new();
@@ -577,7 +607,8 @@ fn search_group_triples(
                 // only covers one of them.
                 let covered_count = if damage_mode {
                     triple_covered_key_count(
-                        &full_indices6, relics_normal, relics_deep, nightfarer, range_keys
+                        &full_indices6, relics_normal, relics_deep, nightfarer, range_keys,
+                        selected_groups_by_key, selected_levels_by_key
                     )
                 } else { 0 };
                 let this_priority = (covered_count, points);
@@ -760,6 +791,8 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             &damage_mults,
             &excluded_demerits,
             &range_keys,
+            &selected_groups_by_key,
+            &selected_levels_by_key,
         );
         checked_local += checked_norm;
 
@@ -777,6 +810,8 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             &damage_mults,
             &excluded_demerits,
             &range_keys,
+            &selected_groups_by_key,
+            &selected_levels_by_key,
         );
         checked_local += checked_deep;
 
@@ -849,6 +884,15 @@ mod damage_tests {
         RelicSlot { color: Some(1), effects: effects.into_iter().map(|(key, stacks, nf)| Effect {
             key, nightfarer: nf, stacks, group: None, level: None, startingBonus: None, r#type: None,
         }).collect() }
+    }
+    // A relic carrying one stackable, grouped/leveled effect (e.g. a tiered
+    // "attack power +N" effect), for tests exercising same-group-higher-tier
+    // matching.
+    fn tiered_relic(key: u32, group: u8, level: u8) -> RelicSlot {
+        RelicSlot { color: Some(1), effects: vec![Effect {
+            key, nightfarer: None, stacks: Some(true), group: Some(group), level: Some(level),
+            startingBonus: None, r#type: None,
+        }] }
     }
     fn mults(pairs: &[(usize, f32)]) -> Vec<f32> {
         let mut m = vec![1.0f32; EFFECT_KEY_SPACE];
@@ -976,6 +1020,8 @@ mod damage_tests {
             &damage_mults,
             &excluded_demerits,
             &range_keys,
+            &[u8::MAX; EFFECT_KEY_SPACE],
+            &[u8::MAX; EFFECT_KEY_SPACE],
         );
 
         assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
@@ -1044,6 +1090,8 @@ mod damage_tests {
             &damage_mults,
             &excluded_demerits,
             &range_keys,
+            &[u8::MAX; EFFECT_KEY_SPACE],
+            &[u8::MAX; EFFECT_KEY_SPACE],
         );
 
         assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
@@ -1065,6 +1113,88 @@ mod damage_tests {
             "the only triple covering both required keys (30 and 31, via relic \
              {rare_relic_idx}) was pruned away by {NOISE_COUNT} higher-damage \
              triples that only cover key 30"
+        );
+    }
+
+    #[test]
+    fn musthave_triple_covered_via_higher_tier_survives_pruning_against_lower_tier_fillers() {
+        // Regression test for a real bug: triple_covered_key_count matched a
+        // required must-have key by exact effect.key equality only, unlike
+        // combination_satisfies_ranges' final check, which also accepts a
+        // same-group, equal-or-higher stackable tier (e.g. a must-have on
+        // "attack power +3" is satisfied by a relic carrying only "+4"). A
+        // triple satisfying the requirement solely via a higher tier got
+        // covered_count == 0 and lost every pruning contest against fillers
+        // that happen to carry the exact literal key, even when those
+        // fillers score no higher on damage points - so the only
+        // tier-satisfying relic could be evicted from the top-K cap before
+        // the merge/range-check step ever ran.
+        const FILLER_COUNT: usize = TOP_GROUP_RESULTS + 50;
+        const GROUP: u8 = 7;
+        const REQUIRED_KEY: u32 = 40; // "tier 3" of the group
+        const REQUIRED_LEVEL: u8 = 3;
+        const HIGHER_TIER_KEY: u32 = 41; // "tier 4" of the same group
+
+        // Every filler relic carries the exact required key (tier 3) but no
+        // damage multiplier either - so fillers and the tiered relic tie on
+        // points (both stay at 1.0), isolating the coverage-based retention
+        // bonus as the only thing that can save the tiered relic from pure
+        // enumeration-order eviction.
+        let mut normal: Vec<RelicSlot> = (0..FILLER_COUNT)
+            .map(|_| tiered_relic(REQUIRED_KEY, GROUP, REQUIRED_LEVEL))
+            .collect();
+        let tiered_relic_idx = normal.len();
+        normal.push(tiered_relic(HIGHER_TIER_KEY, GROUP, REQUIRED_LEVEL + 1));
+
+        let by_color_all_norm: Vec<Vec<usize>> =
+            vec![(0..normal.len()).collect::<Vec<usize>>(); COLOR_SPACE];
+        let by_color_cand_norm = by_color_all_norm.clone();
+
+        let damage_mults = mults(&[]); // keys 40/41 stay 1.0 - pure coverage contest
+        let range_keys: Vec<u32> = vec![REQUIRED_KEY];
+
+        // Precomputed the same way search_combinations does from
+        // input.selected_effects: the required key's OWN group/level.
+        let mut selected_groups_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_levels_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        selected_groups_by_key[REQUIRED_KEY as usize] = GROUP;
+        selected_levels_by_key[REQUIRED_KEY as usize] = REQUIRED_LEVEL;
+
+        let selected_bitmap = [false; EFFECT_KEY_SPACE];
+        let recommended_bitmap = [false; EFFECT_KEY_SPACE];
+        let deep: Vec<RelicSlot> = vec![];
+        let excluded_demerits: Vec<u32> = vec![];
+        let norm_slots: [u8; 3] = [1, 1, 1];
+
+        let (triples, _checked) = search_group_triples(
+            norm_slots,
+            &by_color_all_norm,
+            &by_color_cand_norm,
+            &normal,
+            &deep,
+            false,
+            0,
+            &selected_bitmap,
+            &recommended_bitmap,
+            true,
+            &damage_mults,
+            &excluded_demerits,
+            &range_keys,
+            &selected_groups_by_key,
+            &selected_levels_by_key,
+        );
+
+        assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
+        let has_tiered_triple = triples.iter().any(|(indices, _points, covered_count)| {
+            *covered_count > 0 && indices.iter().any(|i| *i == Some(tiered_relic_idx))
+        });
+        assert!(
+            has_tiered_triple,
+            "the only relic satisfying the must-have via a higher tier (key \
+             {HIGHER_TIER_KEY}, tier {}, vs required key {REQUIRED_KEY} tier \
+             {REQUIRED_LEVEL}) was pruned away by {FILLER_COUNT} exact-key \
+             fillers despite tying on damage points",
+            REQUIRED_LEVEL + 1
         );
     }
 }
