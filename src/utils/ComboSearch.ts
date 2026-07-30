@@ -66,6 +66,20 @@ const pending = new Map<
   }
 >();
 
+// Live-progress poll intervals, keyed by request id. A request only gets an
+// entry here if the worker sent a "progressBuffer" message for it (i.e.
+// SharedArrayBuffer/threads were available); otherwise progress stays at
+// today's single indeterminate "main" stage update.
+const progressIntervals = new Map<number, ReturnType<typeof setInterval>>();
+
+function clearProgressInterval(id: number): void {
+  const intervalId = progressIntervals.get(id);
+  if (intervalId !== undefined) {
+    clearInterval(intervalId);
+    progressIntervals.delete(id);
+  }
+}
+
 function getWorker(): Worker {
   if (workerSingleton) {
     return workerSingleton;
@@ -98,7 +112,23 @@ function getWorker(): Worker {
         });
         break;
       }
+      case "progressBuffer": {
+        const view = new Int32Array(msg.buffer);
+        const { relics, deepRelics } = entry.context.data;
+        const availableRelicsCount = relics.length + deepRelics.length;
+        const intervalId = setInterval(() => {
+          const checked = Atomics.load(view, msg.ptrIndex);
+          entry.onProgress?.({
+            totalCombinationsChecked: checked,
+            availableRelicsCount,
+            stage: "main",
+          });
+        }, 150);
+        progressIntervals.set(msg.id, intervalId);
+        break;
+      }
       case "result": {
+        clearProgressInterval(msg.id);
         const { enabledVessels, data } = entry.context;
         const combinations: VesselCombination[] = msg.combinations.map((e) => {
           const vessel = enabledVessels[e.vessel_index];
@@ -144,6 +174,7 @@ function getWorker(): Worker {
         break;
       }
       case "error": {
+        clearProgressInterval(msg.id);
         const err = msg as ComboSearchWorkerError;
         pending.delete(msg.id);
         if (activeRequestId === msg.id) {
@@ -160,6 +191,7 @@ function getWorker(): Worker {
     for (const [id, p] of pending) {
       p.reject(err);
       pending.delete(id);
+      clearProgressInterval(id);
     }
     activeRequestId = null;
     // reset worker
@@ -175,6 +207,7 @@ export function cancelCurrentSearch(): void {
   for (const [id, p] of pending) {
     p.reject(new Error("Search cancelled"));
     pending.delete(id);
+    clearProgressInterval(id);
   }
   activeRequestId = null;
 
