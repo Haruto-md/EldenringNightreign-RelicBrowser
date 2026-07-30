@@ -3,7 +3,7 @@ import {
   mustHaveToEffectRange,
   sanitizeMustHaves,
   type MustHaveEntry,
-} from "./DamageOptimizer";
+} from "./DamageOptimizer.mustHave";
 
 describe("sanitizeMustHaves", () => {
   it("defaults comparison to atLeast for legacy entries with no comparison field", () => {
