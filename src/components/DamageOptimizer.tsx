@@ -947,7 +947,11 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
           />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {isSearching ? (
-              "検索中..."
+              progress !== null && progress.totalCombinationsChecked > 0 ? (
+                `検索中... ${progress.totalCombinationsChecked.toLocaleString()}件チェック済み`
+              ) : (
+                "検索中..."
+              )
             ) : progress?.stage === "done" && searchResults !== null ? (
               `${progress.totalCombinationsChecked.toLocaleString()}件の組み合わせを${searchResults.searchTime}msでチェックしました。`
             ) : (
