@@ -104,10 +104,18 @@ The mechanism:
 
 ## Testing
 
-- Rust: unit test that after calling `search_combinations` with a large
-  synthetic input, `PROGRESS_COUNTER` ends at a value close to (within one
-  batch of) the returned `total_combinations_checked` — verifies the batched
-  flush actually captures the bulk of the work, not just a fixed offset.
+- Rust: this crate's `wasm32-unknown-unknown` target has no configured test
+  runner in this environment (`cargo test --target wasm32-unknown-unknown`
+  compiles but cannot execute the resulting `.wasm` test binary — confirmed
+  while writing the implementation plan). So instead of a Rust `#[test]`,
+  verify the counter through the compiled artifact: a Vitest test that
+  builds the module via `wasm-pack build`, calls `search_combinations` with
+  a large synthetic input, then reads `PROGRESS_COUNTER` directly through
+  the new `wasm_memory()`/`progress_counter_ptr()` exports and asserts it
+  ends close to (within a few batches of) the returned
+  `total_combinations_checked` — verifies the batched flush actually
+  captures the bulk of the work, not just a fixed offset, using the same
+  real WASM module the app ships.
 - JS: a `ComboSearch.ts` test that mocks a worker sending `progressBuffer`
   followed by `result`, and asserts `onProgress` was called at least once
   with an increasing `totalCombinationsChecked` before the result resolves,
