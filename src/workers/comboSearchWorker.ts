@@ -1,6 +1,8 @@
 import init, {
   initThreadPool,
+  progress_counter_ptr,
   search_combinations,
+  wasm_memory,
 } from "../../wasm/combo_search/pkg/combo_search.js";
 import { type Effect } from "../resources/effects";
 import type { RelicSlot } from "../types/SaveFile";
@@ -34,6 +36,13 @@ export interface ComboSearchWorkerProgress {
   stage: "main" | "done";
 }
 
+export interface ComboSearchWorkerProgressBuffer {
+  type: "progressBuffer";
+  id: number;
+  buffer: SharedArrayBuffer;
+  ptrIndex: number;
+}
+
 export interface ComboSearchWorkerResult {
   type: "result";
   id: number;
@@ -62,6 +71,7 @@ export interface ComboSearchWorkerError {
 
 export type ComboSearchWorkerMessage =
   | ComboSearchWorkerProgress
+  | ComboSearchWorkerProgressBuffer
   | ComboSearchWorkerResult
   | ComboSearchWorkerError;
 
@@ -70,6 +80,7 @@ export type ComboSearchWorkerRequest =
   | { type: "cancel"; id?: number };
 
 let initialized: Promise<boolean> | undefined;
+let threadPoolInitialized = false;
 
 async function initComboSearchWasm(): Promise<void> {
   if (!initialized) {
@@ -89,6 +100,7 @@ async function initComboSearchWasm(): Promise<void> {
           const hw = typeof navHW === "number" && navHW > 0 ? navHW : 4;
           const threads = Math.min(8, hw); // cap at max vessels
           await initThreadPool(threads);
+          threadPoolInitialized = true;
         } catch (e) {
           // Fallback silently if threads not available
           console.warn(
@@ -173,6 +185,33 @@ self.onmessage = async (event: MessageEvent<ComboSearchWorkerRequest>) => {
 
     // Initialize WASM
     await initComboSearchWasm();
+
+    // If the rayon thread pool initialized (SharedArrayBuffer/threads are
+    // available), share this module's WASM memory with the main thread so it
+    // can poll the live progress counter via Atomics.load while this worker
+    // is blocked inside the synchronous search_combinations call below. This
+    // is best-effort: if anything here fails or isn't available, the search
+    // still proceeds normally with no live progress (today's indeterminate
+    // spinner behavior).
+    if (
+      threadPoolInitialized &&
+      typeof wasm_memory === "function" &&
+      typeof progress_counter_ptr === "function"
+    ) {
+      try {
+        const memory = wasm_memory() as WebAssembly.Memory;
+        const ptr = progress_counter_ptr() as number;
+        const progressBufferMessage: ComboSearchWorkerProgressBuffer = {
+          type: "progressBuffer",
+          id,
+          buffer: memory.buffer as SharedArrayBuffer,
+          ptrIndex: ptr / 4,
+        };
+        self.postMessage(progressBufferMessage);
+      } catch {
+        // Best-effort only; fall through to the normal search.
+      }
+    }
 
     // Prepare input for WASM
     const input = buildWasmInput(payload);
