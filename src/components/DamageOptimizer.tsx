@@ -474,7 +474,10 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         }
         return {
           ...s,
-          mustHaves: [...s.mustHaves, { effectKey, minStacks: 1 }],
+          mustHaves: [
+            ...s.mustHaves,
+            { effectKey, comparison: "atLeast" as const, stacks: 1 },
+          ],
         };
       });
     },
@@ -491,12 +494,24 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     [updateCurrent]
   );
 
-  const setMustHaveMinStacks = useCallback(
-    (effectKey: number, minStacks: number) => {
+  const setMustHaveStacks = useCallback(
+    (effectKey: number, stacks: number) => {
       updateCurrent((s) => ({
         ...s,
         mustHaves: s.mustHaves.map((m) =>
-          m.effectKey === effectKey ? { ...m, minStacks } : m
+          m.effectKey === effectKey ? { ...m, stacks } : m
+        ),
+      }));
+    },
+    [updateCurrent]
+  );
+
+  const setMustHaveComparison = useCallback(
+    (effectKey: number, comparison: MustHaveEntry["comparison"]) => {
+      updateCurrent((s) => ({
+        ...s,
+        mustHaves: s.mustHaves.map((m) =>
+          m.effectKey === effectKey ? { ...m, comparison } : m
         ),
       }));
     },
