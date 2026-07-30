@@ -384,6 +384,131 @@ export class RelicParser {
     }
   }
 
+  private static readonly PRESET_RECORD_SIZE = 80;
+  private static readonly PRESET_HANDLE_SLOT_COUNT = 6;
+  private static readonly PRESET_HANDLE_SLOT_SIZE = 4;
+  private static readonly PRESET_MIN_RUN_RECORDS = 3;
+
+  /**
+   * Marks `relics` referenced by any saved preset (not just the active
+   * vessel `markEquippedRelics` covers) as `equipped` - the sell screen
+   * treats "used in a preset" the same as "currently equipped": both make
+   * a relic unsellable in-game.
+   *
+   * Presets are a fixed-size array (up to 100 records) immediately after
+   * the relic list: each record is a 6-slot relic handle array (24 bytes),
+   * an 8-byte hash/timestamp, and a UTF-16LE name, for a fixed 80 bytes per
+   * record - found by diffing paired saves before/after creating and
+   * deleting single presets and reading the resulting byte-level change.
+   * Unlike the active vessel there's no fixed marker anchoring the array
+   * (presets have no equivalent of EQUIP_MARKER), so its start is found by
+   * scanning forward from the end of the relic list for runs of
+   * 80-byte-spaced windows whose handles resolve against this save's own
+   * relics. Stray leftover bytes elsewhere in the buffer can coincidentally
+   * look similar (confirmed on a real save), so among all such runs the
+   * earliest (lowest-offset) one of a plausible minimum length is used -
+   * the real array is always written before any leftover/backup data.
+   * Empty (unused) preset slots are bridged rather than treated as
+   * run-breaks, since a real array can have unused records in the middle.
+   */
+  private static markPresetRelics(
+    currentEntry: Uint8Array,
+    relics: RelicSlot[]
+  ): void {
+    const relicsById = new Map(relics.map((relic) => [relic.id, relic]));
+    const maxRelicEnd = relics.reduce(
+      (max, relic) => Math.max(max, (relic.byteOffset ?? 0) + (relic.slotSize ?? 0)),
+      0
+    );
+
+    const readHandle = (offset: number): number | null => {
+      if (offset + this.PRESET_HANDLE_SLOT_SIZE > currentEntry.length) {
+        return null;
+      }
+      return (
+        this.readIntLE(
+          currentEntry.slice(offset, offset + this.PRESET_HANDLE_SLOT_SIZE)
+        ) >>> 0
+      );
+    };
+
+    const classifyWindow = (base: number): "valid" | "empty" | "invalid" => {
+      if (base + this.PRESET_RECORD_SIZE > currentEntry.length) {
+        return "invalid";
+      }
+      let validCount = 0;
+      for (let slot = 0; slot < this.PRESET_HANDLE_SLOT_COUNT; slot++) {
+        const handle = readHandle(base + slot * this.PRESET_HANDLE_SLOT_SIZE);
+        if (handle === null) {
+          return "invalid";
+        }
+        if (handle === 0 || handle === 0xffffffff) {
+          continue;
+        }
+        if (!relicsById.has(handle)) {
+          return "invalid";
+        }
+        validCount++;
+      }
+      return validCount > 0 ? "valid" : "empty";
+    };
+    const isPlausible = (base: number) => classifyWindow(base) !== "invalid";
+
+    const seeds: number[] = [];
+    for (
+      let base = maxRelicEnd;
+      base + this.PRESET_RECORD_SIZE <= currentEntry.length;
+      base += this.PRESET_HANDLE_SLOT_SIZE
+    ) {
+      if (classifyWindow(base) === "valid") {
+        seeds.push(base);
+      }
+    }
+
+    const seedSet = new Set(seeds);
+    const runSeedsByStart = new Map<number, number[]>();
+    const runStartBySeed = new Map<number, number>();
+    for (const seed of seeds) {
+      if (runStartBySeed.has(seed)) {
+        continue;
+      }
+      let start = seed;
+      while (isPlausible(start - this.PRESET_RECORD_SIZE)) {
+        start -= this.PRESET_RECORD_SIZE;
+      }
+      if (!runSeedsByStart.has(start)) {
+        const runSeeds: number[] = [];
+        for (let cur = start; isPlausible(cur); cur += this.PRESET_RECORD_SIZE) {
+          if (seedSet.has(cur)) {
+            runSeeds.push(cur);
+          }
+        }
+        runSeedsByStart.set(start, runSeeds);
+      }
+      for (const runSeed of runSeedsByStart.get(start)!) {
+        runStartBySeed.set(runSeed, start);
+      }
+    }
+
+    const eligibleRuns = [...runSeedsByStart.entries()]
+      .filter(([, runSeeds]) => runSeeds.length >= this.PRESET_MIN_RUN_RECORDS)
+      .sort((a, b) => a[0] - b[0]);
+    const chosenSeeds = eligibleRuns[0]?.[1] ?? [];
+
+    for (const base of chosenSeeds) {
+      for (let slot = 0; slot < this.PRESET_HANDLE_SLOT_COUNT; slot++) {
+        const handle = readHandle(base + slot * this.PRESET_HANDLE_SLOT_SIZE);
+        if (handle === null || handle === 0 || handle === 0xffffffff) {
+          continue;
+        }
+        const relic = relicsById.get(handle);
+        if (relic) {
+          relic.equipped = true;
+        }
+      }
+    }
+  }
+
   public static getNames(bnd4Entry: BND4Entry): Uint8Array<ArrayBuffer>[] {
     const namesEntry = bnd4Entry.cleanData;
     const names: Uint8Array<ArrayBuffer>[] = [];
@@ -516,6 +641,7 @@ export class RelicParser {
 
     const relics = this.setCoordinates(baseRelics);
     this.markEquippedRelics(currentEntry.cleanData, relics);
+    this.markPresetRelics(currentEntry.cleanData, relics);
 
     return {
       name,
