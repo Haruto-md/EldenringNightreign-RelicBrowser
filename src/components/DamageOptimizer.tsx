@@ -151,10 +151,16 @@ interface MustHaveEntry {
   minStacks: number;
 }
 
+type DamageOptElement = "physical" | "magic" | "fire" | "lightning" | "holy";
+
 interface DamageOptSettings {
   primaryCategoryId: string;
   schoolId?: string;
-  element: "physical" | "magic" | "fire" | "lightning" | "holy";
+  // null = 無属性 (no element specified), explicitly chosen by the user.
+  // Distinct from "key absent" (JSON.stringify drops undefined properties, so
+  // it can't round-trip through localStorage the way null can) — absent/
+  // invalid still falls back to DEFAULT_ELEMENT.
+  element: DamageOptElement | null;
   enabledAttackModes: string[];
   mustHaves: MustHaveEntry[];
   excludedDemerits: number[];
@@ -252,7 +258,9 @@ function loadSettingsFromStorage(): Record<Nightfarer, DamageOptSettings> {
       if (typeof val.schoolId === "string") {
         current.schoolId = val.schoolId;
       }
-      if (
+      if (val.element === null) {
+        current.element = null;
+      } else if (
         typeof val.element === "string" &&
         ["physical", "magic", "fire", "lightning", "holy"].includes(
           val.element
@@ -405,8 +413,11 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
 
   const handleElementChange = useCallback(
     (event: SelectChangeEvent<string>) => {
-      const el = event.target.value as DamageOptSettings["element"];
-      updateCurrent((s) => ({ ...s, element: el }));
+      const el = event.target.value;
+      updateCurrent((s) => ({
+        ...s,
+        element: el === "" ? null : (el as DamageOptElement),
+      }));
     },
     [updateCurrent]
   );
@@ -499,7 +510,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
       nightfarer: selectedNightfarer,
       primaryCategoryId: current.primaryCategoryId,
       schoolId: current.schoolId,
-      element: current.element,
+      element: current.element ?? undefined,
       enabledAttackModes: new Set(current.enabledAttackModes),
     }),
     [selectedNightfarer, current]
@@ -725,9 +736,10 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
             <Select
               labelId="damage-opt-element-label"
               label="属性"
-              value={current.element}
+              value={current.element ?? ""}
               onChange={handleElementChange}
             >
+              <MenuItem value="">無属性</MenuItem>
               {damageElements.map((el) => (
                 <MenuItem key={el.id} value={el.id}>
                   {elementLabels[el.id] ?? el.id}

@@ -82,4 +82,16 @@ describe("buildDamageMultiplierArray", () => {
     });
     expect(a[EffectKey.improvedAffinityAttackPower]).toBeGreaterThan(1);
   });
+
+  it("with no element selected (無属性), does not count ANY element-restricted bonus — not even physical's", () => {
+    // 無属性 means "don't factor in element-specific attack-power bonuses at
+    // all" — it is NOT "assume every element's bonus applies simultaneously".
+    // A relic granting +physical attack power isn't relevant to a search that
+    // isn't restricting by element, any more than a magic- or fire-only bonus
+    // would be; none of them should inflate the multiplier or make a relic
+    // count as a search candidate on that basis alone.
+    const a = buildDamageMultiplierArray({ ...base, element: undefined });
+    expect(a[EffectKey.physicalAttackUp]).toBe(1);
+    expect(a[EffectKey.improvedAffinityAttackPower]).toBe(1);
+  });
 });

@@ -11,11 +11,19 @@ import { Nightfarer } from "./Nightfarers";
 
 export const EFFECT_KEY_ARRAY_LENGTH = EffectKey.LENGTH;
 
+export type DamageElement = "physical" | "magic" | "fire" | "lightning" | "holy";
+
 export interface DamageProfileSelection {
   nightfarer: Nightfarer;
   primaryCategoryId: string;
   schoolId?: string;
-  element: "physical" | "magic" | "fire" | "lightning" | "holy";
+  // undefined = 無属性 (no element specified): element-restricted attack-power
+  // bonuses are excluded from the calculation entirely, rather than forcing
+  // the user to guess a single element up front. This is NOT "count every
+  // element's bonus at once" — a build only ever has one real damage type, so
+  // treating every element's bonus as simultaneously active would inflate the
+  // multiplier with bonuses that don't actually apply.
+  element?: DamageElement;
   enabledAttackModes: ReadonlySet<string>;
 }
 
@@ -41,10 +49,15 @@ function activeBuckets(sel: DamageProfileSelection): Set<string> {
       if (s) {active.add(s.bucket);}
     }
   }
-  const el = damageElements.find((e) => e.id === sel.element);
-  if (el) {
-    active.add(el.bucket);
-    if (sel.element !== "physical") {active.add("affinityAttackUp");}
+  // 無属性: no element bucket (nor affinityAttackUp) is activated at all when
+  // none was chosen — element-restricted bonuses simply don't count, rather
+  // than every element's bonus counting at once.
+  if (sel.element !== undefined) {
+    const el = damageElements.find((e) => e.id === sel.element);
+    if (el) {
+      active.add(el.bucket);
+      if (sel.element !== "physical") {active.add("affinityAttackUp");}
+    }
   }
   return active;
 }
