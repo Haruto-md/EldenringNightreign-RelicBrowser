@@ -10,11 +10,20 @@ import { getRelicColor } from "../utils/DataUtils.js";
 import { Nightfarer } from "../utils/Nightfarers";
 import type { Vessel } from "../utils/Vessels";
 
+export type MatchMode = "exact" | "higherOrEqual" | "lowerOrEqual";
+
 export interface SelectedEffectEntry {
   effectKey: number;
   minStacks: number;
   maxStacks: number;
+  matchMode: MatchMode;
 }
+
+const MATCH_MODE_WIRE_VALUE: Record<MatchMode, number> = {
+  exact: 0,
+  higherOrEqual: 1,
+  lowerOrEqual: 2,
+};
 
 export interface ComboSearchWorkerInput {
   nightfarer: Nightfarer;
@@ -150,6 +159,7 @@ export function buildWasmInput({
       effect_key: e.effectKey,
       min_stacks: e.minStacks,
       max_stacks: e.maxStacks,
+      match_mode: MATCH_MODE_WIRE_VALUE[e.matchMode],
     })),
     damage_multipliers: damageMultipliers ?? undefined,
     excluded_demerit_keys: excludedDemeritKeys ?? undefined,

@@ -53,7 +53,7 @@ describe("ComboSearch", () => {
       relics,
       [],
       [anyoneVessels[2]],
-      [{ effectKey: selectedEffect.key, minStacks: 1, maxStacks: 1 }]
+      [{ effectKey: selectedEffect.key, minStacks: 1, maxStacks: 1, matchMode: "higherOrEqual" }]
     );
 
     cancelCurrentSearch();
@@ -369,7 +369,7 @@ describe("ComboSearch", () => {
           relics,
           [],
           anyoneVessels,
-          [{ effectKey: selectedEffect.key, minStacks: 1, maxStacks: 1 }]
+          [{ effectKey: selectedEffect.key, minStacks: 1, maxStacks: 1, matchMode: "higherOrEqual" }]
         );
         const wasmInput = buildWasmInput(workerInput);
         const result = search_combinations(wasmInput);

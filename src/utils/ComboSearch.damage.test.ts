@@ -194,6 +194,7 @@ describe("ComboSearch damage mode", () => {
         effectKey: EffectKey.improvedMeleeAttackPower,
         minStacks: 1,
         maxStacks: 99,
+        matchMode: "higherOrEqual" as const,
       },
     ];
 
@@ -385,7 +386,7 @@ describe("ComboSearch damage mode", () => {
       [vessel],
       multiplierArray,
       [],
-      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6 }]
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6, matchMode: "higherOrEqual" }]
     );
 
     // Candidate widening: the +4-only relic must not be filtered out before
@@ -460,7 +461,7 @@ describe("ComboSearch damage mode", () => {
       [vessel],
       multiplierArray,
       [],
-      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6 }]
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6, matchMode: "higherOrEqual" }]
     );
 
     // All 261 relics are "relevant" (fillers via the real multiplier, the
@@ -475,5 +476,91 @@ describe("ComboSearch damage mode", () => {
     };
 
     expect(output.combinations.length).toBeGreaterThan(0);
+  });
+
+  it("filterRelicsForDamage only widens candidacy per each must-have's own matchMode", () => {
+    // Note: filterRelicsForDamage's gap-filler (untouched by this change)
+    // unconditionally tops up each color group with whatever's left over, up
+    // to RESTRICTED_GAP_FILLER_CAP (10) when restrictToScoringRelics=true.
+    // With only the three tier relics in the pool, the one tier excluded by
+    // isRelevantEffect would still get swept back in as the sole "leftover"
+    // gap-filler candidate, masking the very widening behavior under test.
+    // To isolate isRelevantEffect's matchMode handling from that unrelated
+    // padding, we saturate the cap first with 10 same-color decoy relics
+    // (irrelevant effect, no multiplier) placed ahead of the tier relics in
+    // input order — gap-filler candidates preserve input order for ties, so
+    // the decoys occupy the cap and the non-relevant tier relic(s) are
+    // pushed past slice(0, 10) and excluded, leaving only the primary
+    // (isRelevantEffect-driven) matches plus the predictable decoy set.
+    const plus3 = getEffectByKey(EffectKey.physicalAttackUpPlus3);
+    const plus2 = getEffectByKey(EffectKey.physicalAttackUpPlus2);
+    const plus4 = getEffectByKey(EffectKey.physicalAttackUpPlus4);
+    const fillerEffect = getEffectByKey(EffectKey.strengthPlus1);
+    assert(plus3 !== undefined);
+    assert(plus2 !== undefined);
+    assert(plus4 !== undefined);
+    assert(fillerEffect !== undefined);
+
+    const RED_ITEM_ID = 102;
+    const higherTierRelic = makeRelic(RED_ITEM_ID, plus4);
+    const lowerTierRelic = makeRelic(RED_ITEM_ID, plus2);
+    const exactTierRelic = makeRelic(RED_ITEM_ID, plus3);
+    const decoyFillers = Array.from({ length: 10 }, () =>
+      makeRelic(RED_ITEM_ID, fillerEffect)
+    );
+    const decoyIds = decoyFillers.map((r) => r.id);
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+
+    const higherOrEqualInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      [...decoyFillers, higherTierRelic, lowerTierRelic, exactTierRelic],
+      [],
+      [vessel],
+      multiplierArray,
+      [],
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6, matchMode: "higherOrEqual" }]
+    );
+    const higherOrEqualNames = higherOrEqualInput.relics.map((r) => r.id).sort();
+    expect(higherOrEqualNames).toEqual(
+      [higherTierRelic.id, exactTierRelic.id, ...decoyIds].sort()
+    );
+
+    const lowerOrEqualInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      [...decoyFillers, higherTierRelic, lowerTierRelic, exactTierRelic],
+      [],
+      [vessel],
+      multiplierArray,
+      [],
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6, matchMode: "lowerOrEqual" }]
+    );
+    const lowerOrEqualNames = lowerOrEqualInput.relics.map((r) => r.id).sort();
+    expect(lowerOrEqualNames).toEqual(
+      [lowerTierRelic.id, exactTierRelic.id, ...decoyIds].sort()
+    );
+
+    const exactInput = buildDamageWorkerInput(
+      Nightfarer.Wylder,
+      [...decoyFillers, higherTierRelic, lowerTierRelic, exactTierRelic],
+      [],
+      [vessel],
+      multiplierArray,
+      [],
+      [{ effectKey: EffectKey.physicalAttackUpPlus3, minStacks: 1, maxStacks: 6, matchMode: "exact" }]
+    );
+    const exactNames = exactInput.relics.map((r) => r.id).sort();
+    expect(exactNames).toEqual([exactTierRelic.id, ...decoyIds].sort());
   });
 });

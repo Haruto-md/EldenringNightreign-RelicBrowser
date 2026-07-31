@@ -1,5 +1,9 @@
 import type { EffectKey } from "../resources/effectKeys";
-import { isSameGroupAndEqualOrBetter, type Effect } from "../resources/effects";
+import {
+  isSameGroupAndEqualOrBetter,
+  isSameGroupAndEqualOrWorse,
+  type Effect,
+} from "../resources/effects";
 import { items } from "../resources/items";
 import type { RelicSlot } from "../types/SaveFile";
 import type {
@@ -44,10 +48,13 @@ export interface ComboSearchResult {
   availableRelicsCount: number;
 }
 
+export type MatchMode = "exact" | "higherOrEqual" | "lowerOrEqual";
+
 export type SelectedEffectEntry = {
   effectKey: number;
   minStacks: number;
   maxStacks: number;
+  matchMode: MatchMode;
 };
 
 // Persistent worker and request handling
@@ -406,7 +413,7 @@ function filterRelicsForDamage(
   enabledVessels: Vessel[],
   deepRelics: boolean,
   multiplierArray: Float32Array,
-  mustHaveEffects: Effect[],
+  mustHaveEffects: { effect: Effect; matchMode: MatchMode }[],
   restrictToScoring: boolean
 ): RelicSlot[] {
   const vesselSlotIndices = deepRelics ? [3, 4, 5] : [0, 1, 2];
@@ -423,10 +430,18 @@ function filterRelicsForDamage(
   // excluded from candidacy before that check ever sees it.
   const isRelevantEffect = (effect: Effect): boolean =>
     multiplierArray[effect.key] > 1 ||
-    mustHaveEffects.some(
-      (required) =>
-        effect === required || isSameGroupAndEqualOrBetter(required, effect)
-    );
+    mustHaveEffects.some(({ effect: required, matchMode }) => {
+      if (effect === required) {
+        return true;
+      }
+      if (matchMode === "higherOrEqual") {
+        return isSameGroupAndEqualOrBetter(required, effect);
+      }
+      if (matchMode === "lowerOrEqual") {
+        return isSameGroupAndEqualOrWorse(required, effect);
+      }
+      return false; // "exact": only the identity check above counts
+    });
 
   const colorEligible = (relic: RelicSlot): boolean => {
     const item = items.get(relic.itemId);
@@ -551,8 +566,10 @@ export function buildDamageWorkerInput(
     .filter((effect): effect is Effect => effect !== undefined);
   const mustHaveEffects = effectRanges
     .filter(({ minStacks }) => minStacks > 0)
-    .map(({ effectKey }) => getEffectByKey(effectKey as EffectKey))
-    .filter((effect): effect is Effect => effect !== undefined);
+    .flatMap(({ effectKey, matchMode }) => {
+      const effect = getEffectByKey(effectKey as EffectKey);
+      return effect ? [{ effect, matchMode }] : [];
+    });
   return {
     nightfarer,
     selectedEffects: rangeEffects,
