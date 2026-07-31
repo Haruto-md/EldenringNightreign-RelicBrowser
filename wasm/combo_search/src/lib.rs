@@ -481,6 +481,7 @@ fn triple_covered_key_count(
     range_keys: &[u32],
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_match_mode_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> u8 {
     let mut covered = 0u8;
     for &key in range_keys {
@@ -489,7 +490,7 @@ fn triple_covered_key_count(
                 let relic = if slot_i < 3 { unsafe { relics_normal.get_unchecked(*idx) } } else { unsafe { relics_deep.get_unchecked(*idx) } };
                 let found = relic.effects.iter().any(|effect| {
                     if let Some(nf) = effect.nightfarer { if nf != nightfarer { return false; } }
-                    effect_satisfies_key(effect, key, selected_groups_by_key, selected_levels_by_key)
+                    effect_satisfies_key(effect, key, selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key)
                 });
                 if found { covered += 1; break; }
             }
@@ -526,6 +527,7 @@ fn search_group_triples(
     range_keys: &[u32],
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_match_mode_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> (Vec<([Option<usize>;3], f32, u8)>, u32) {
     let mut local_results: Vec<([Option<usize>;3], f32, u8)> = Vec::with_capacity(TOP_GROUP_RESULTS);
     let mut local_seen: HashSet<u32> = HashSet::new();
@@ -604,7 +606,7 @@ fn search_group_triples(
                 let covered_count = if damage_mode {
                     triple_covered_key_count(
                         &full_indices6, relics_normal, relics_deep, nightfarer, range_keys,
-                        selected_groups_by_key, selected_levels_by_key
+                        selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key
                     )
                 } else { 0 };
                 let this_priority = (covered_count, points);
@@ -807,6 +809,7 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             &range_keys,
             &selected_groups_by_key,
             &selected_levels_by_key,
+            &selected_match_mode_by_key,
         );
         checked_local += checked_norm;
 
@@ -826,6 +829,7 @@ pub fn search_combinations(input: JsValue) -> JsValue {
             &range_keys,
             &selected_groups_by_key,
             &selected_levels_by_key,
+            &selected_match_mode_by_key,
         );
         checked_local += checked_deep;
 
@@ -1037,6 +1041,7 @@ mod damage_tests {
             &range_keys,
             &[u8::MAX; EFFECT_KEY_SPACE],
             &[u8::MAX; EFFECT_KEY_SPACE],
+            &[MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE],
         );
 
         assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
@@ -1107,6 +1112,7 @@ mod damage_tests {
             &range_keys,
             &[u8::MAX; EFFECT_KEY_SPACE],
             &[u8::MAX; EFFECT_KEY_SPACE],
+            &[MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE],
         );
 
         assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
@@ -1174,6 +1180,9 @@ mod damage_tests {
         let mut selected_levels_by_key = [u8::MAX; EFFECT_KEY_SPACE];
         selected_groups_by_key[REQUIRED_KEY as usize] = GROUP;
         selected_levels_by_key[REQUIRED_KEY as usize] = REQUIRED_LEVEL;
+        let mut selected_match_mode_by_key = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
+        // (this test only needs the default "higherOrEqual" behavior it's
+        // named after; no explicit per-key override needed)
 
         let selected_bitmap = [false; EFFECT_KEY_SPACE];
         let recommended_bitmap = [false; EFFECT_KEY_SPACE];
@@ -1197,6 +1206,7 @@ mod damage_tests {
             &range_keys,
             &selected_groups_by_key,
             &selected_levels_by_key,
+            &selected_match_mode_by_key,
         );
 
         assert!(triples.len() <= TOP_GROUP_RESULTS, "must not exceed the cap");
@@ -1211,5 +1221,93 @@ mod damage_tests {
              fillers despite tying on damage points",
             REQUIRED_LEVEL + 1
         );
+    }
+
+    #[test]
+    fn effect_satisfies_key_exact_mode_rejects_higher_tier() {
+        const GROUP: u8 = 7;
+        const REQUIRED_KEY: u32 = 40;
+        const REQUIRED_LEVEL: u8 = 3;
+        const HIGHER_TIER_KEY: u32 = 41;
+
+        let mut selected_groups_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_levels_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_match_mode_by_key = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
+        selected_groups_by_key[REQUIRED_KEY as usize] = GROUP;
+        selected_levels_by_key[REQUIRED_KEY as usize] = REQUIRED_LEVEL;
+        selected_match_mode_by_key[REQUIRED_KEY as usize] = MATCH_MODE_EXACT;
+
+        let higher_tier_effect = Effect {
+            key: HIGHER_TIER_KEY, nightfarer: None, stacks: Some(true),
+            group: Some(GROUP), level: Some(REQUIRED_LEVEL + 1),
+            startingBonus: None, r#type: None,
+        };
+        assert!(!effect_satisfies_key(&higher_tier_effect, REQUIRED_KEY, &selected_groups_by_key, &selected_levels_by_key, &selected_match_mode_by_key));
+
+        let exact_effect = Effect {
+            key: REQUIRED_KEY, nightfarer: None, stacks: Some(true),
+            group: Some(GROUP), level: Some(REQUIRED_LEVEL),
+            startingBonus: None, r#type: None,
+        };
+        assert!(effect_satisfies_key(&exact_effect, REQUIRED_KEY, &selected_groups_by_key, &selected_levels_by_key, &selected_match_mode_by_key));
+    }
+
+    #[test]
+    fn effect_satisfies_key_lower_or_equal_mode_accepts_lower_tier_rejects_higher() {
+        const GROUP: u8 = 7;
+        const REQUIRED_KEY: u32 = 40;
+        const REQUIRED_LEVEL: u8 = 3;
+        const LOWER_TIER_KEY: u32 = 39;
+        const HIGHER_TIER_KEY: u32 = 41;
+
+        let mut selected_groups_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_levels_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_match_mode_by_key = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
+        selected_groups_by_key[REQUIRED_KEY as usize] = GROUP;
+        selected_levels_by_key[REQUIRED_KEY as usize] = REQUIRED_LEVEL;
+        selected_match_mode_by_key[REQUIRED_KEY as usize] = MATCH_MODE_LOWER_OR_EQUAL;
+
+        let lower_tier_effect = Effect {
+            key: LOWER_TIER_KEY, nightfarer: None, stacks: Some(true),
+            group: Some(GROUP), level: Some(REQUIRED_LEVEL - 1),
+            startingBonus: None, r#type: None,
+        };
+        assert!(effect_satisfies_key(&lower_tier_effect, REQUIRED_KEY, &selected_groups_by_key, &selected_levels_by_key, &selected_match_mode_by_key));
+
+        let higher_tier_effect = Effect {
+            key: HIGHER_TIER_KEY, nightfarer: None, stacks: Some(true),
+            group: Some(GROUP), level: Some(REQUIRED_LEVEL + 1),
+            startingBonus: None, r#type: None,
+        };
+        assert!(!effect_satisfies_key(&higher_tier_effect, REQUIRED_KEY, &selected_groups_by_key, &selected_levels_by_key, &selected_match_mode_by_key));
+    }
+
+    #[test]
+    fn combination_satisfies_ranges_exact_mode_end_to_end() {
+        // Full final-check test (not just the effect_satisfies_key unit): a
+        // combination carrying only a higher-tier relic must be REJECTED
+        // under matchMode exact, even though the same setup would PASS under
+        // higherOrEqual.
+        const GROUP: u8 = 7;
+        const REQUIRED_KEY: u32 = 40;
+        const REQUIRED_LEVEL: u8 = 3;
+        const HIGHER_TIER_KEY: u32 = 41;
+
+        let normal = vec![tiered_relic(HIGHER_TIER_KEY, GROUP, REQUIRED_LEVEL + 1)];
+        let deep: Vec<RelicSlot> = vec![];
+        let idx: [Option<usize>; 6] = [Some(0), None, None, None, None, None];
+
+        let mut selected_groups_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_levels_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        selected_groups_by_key[REQUIRED_KEY as usize] = GROUP;
+        selected_levels_by_key[REQUIRED_KEY as usize] = REQUIRED_LEVEL;
+        let ranges: Vec<(u32, u8, u8)> = vec![(REQUIRED_KEY, 1, 6)];
+
+        let mut exact_mode = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
+        exact_mode[REQUIRED_KEY as usize] = MATCH_MODE_EXACT;
+        assert!(!combination_satisfies_ranges(&idx, &normal, &deep, 0, &ranges, &selected_groups_by_key, &selected_levels_by_key, &exact_mode));
+
+        let higher_or_equal_mode = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
+        assert!(combination_satisfies_ranges(&idx, &normal, &deep, 0, &ranges, &selected_groups_by_key, &selected_levels_by_key, &higher_or_equal_mode));
     }
 }
