@@ -409,6 +409,77 @@ describe("ComboSearch damage mode", () => {
     expect(output.combinations.length).toBeGreaterThan(0);
   });
 
+  it("pins the TS->WASM match_mode wire encoding: exact rejects a higher tier, higherOrEqual accepts it", () => {
+    // Regression/pin test: MATCH_MODE_WIRE_VALUE in comboSearchWorker.ts
+    // ({exact:0, higherOrEqual:1, lowerOrEqual:2}) must numerically agree
+    // with MATCH_MODE_EXACT/HIGHER_OR_EQUAL/LOWER_OR_EQUAL (0/1/2) in
+    // wasm/combo_search/src/lib.rs. Nothing else exercises that specific
+    // numeric agreement end-to-end through the real compiled wasm binary —
+    // if someone swapped two of the numbers on either side, every existing
+    // must-have test would stay green (they each only exercise one mode at
+    // a time against internally-consistent constants) while every real
+    // search silently returned wrong combinations. This test builds a pool
+    // whose only must-have satisfier is a same-group HIGHER tier than the
+    // required key and, crucially, gives that tier a real damage multiplier
+    // so it reaches the WASM candidate pool regardless of matchMode — the
+    // acceptance/rejection is then decided purely by the WASM-side decode
+    // of the wire-encoded match_mode, not by TS-side candidate filtering.
+    const plus3 = getEffectByKey(EffectKey.physicalAttackUpPlus3);
+    const plus4 = getEffectByKey(EffectKey.physicalAttackUpPlus4);
+    assert(plus3 !== undefined);
+    assert(plus4 !== undefined);
+
+    const RED_ITEM_ID = 102;
+    const higherTierRelics = Array.from({ length: 3 }, () =>
+      makeRelic(RED_ITEM_ID, plus4)
+    );
+
+    const vessel: Vessel = {
+      name: "Test Vessel",
+      slots: [
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+        RelicSlotColor.Red,
+      ],
+    };
+
+    const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+    // Real multiplier on the higher tier so it's always a scoring candidate,
+    // independent of the must-have's matchMode-driven candidate widening.
+    multiplierArray[EffectKey.physicalAttackUpPlus4] = 1.05;
+
+    const buildInput = (matchMode: "exact" | "higherOrEqual") =>
+      buildDamageWorkerInput(
+        Nightfarer.Wylder,
+        higherTierRelics,
+        [],
+        [vessel],
+        multiplierArray,
+        [],
+        [
+          {
+            effectKey: EffectKey.physicalAttackUpPlus3,
+            minStacks: 1,
+            maxStacks: 6,
+            matchMode,
+          },
+        ]
+      );
+
+    const exactOutput = search_combinations(
+      buildWasmInput(buildInput("exact"))
+    ) as { combinations: unknown[] };
+    expect(exactOutput.combinations.length).toBe(0);
+
+    const higherOrEqualOutput = search_combinations(
+      buildWasmInput(buildInput("higherOrEqual"))
+    ) as { combinations: unknown[] };
+    expect(higherOrEqualOutput.combinations.length).toBeGreaterThan(0);
+  });
+
   it("a higher-tier must-have match survives WASM top-K pruning against many exact-key fillers", { timeout: 30000 }, () => {
     // Regression test for the compiled artifact: the WASM search's per-color
     // top-K pruning (search_group_triples) ranks triples partly by how many

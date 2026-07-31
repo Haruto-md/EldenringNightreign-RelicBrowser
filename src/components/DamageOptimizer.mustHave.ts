@@ -1,6 +1,6 @@
-import type { SelectedEffectEntry } from "../utils/ComboSearch";
+import type { MatchMode, SelectedEffectEntry } from "../utils/ComboSearch";
 
-export type MatchMode = "exact" | "higherOrEqual" | "lowerOrEqual";
+export type { MatchMode };
 
 export interface MustHaveEntry {
   effectKey: number;
@@ -56,20 +56,40 @@ export function sanitizeMustHaves(value: unknown): MustHaveEntry[] {
       );
       minStacks = comparisonRaw === "atLeast" ? stacks : 0;
       maxStacks = comparisonRaw === "atLeast" ? 6 : stacks;
-    } else if (maxStacksRaw !== undefined || minStacksRaw !== undefined) {
-      // New shape (or the oldest legacy shape: a bare `minStacks` with no
-      // comparison field at all, treated the same as atLeast).
-      minStacks = clampStacks(
-        typeof minStacksRaw === "number" ? minStacksRaw : Number(minStacksRaw)
-      );
-      maxStacks =
-        maxStacksRaw === undefined
-          ? 6
-          : clampStacks(
-              typeof maxStacksRaw === "number"
-                ? maxStacksRaw
-                : Number(maxStacksRaw)
-            );
+    } else if (
+      maxStacksRaw !== undefined ||
+      minStacksRaw !== undefined ||
+      stacksRaw !== undefined
+    ) {
+      // New shape (or the oldest legacy shapes: a bare `minStacks` with no
+      // comparison field at all, or an even older bare `stacks` with no
+      // comparison/minStacks/maxStacks field at all, both treated the same
+      // as atLeast).
+      if (minStacksRaw === undefined && stacksRaw !== undefined) {
+        const stacks = clampStacks(
+          typeof stacksRaw === "number" ? stacksRaw : Number(stacksRaw)
+        );
+        minStacks = stacks;
+        maxStacks = 6;
+      } else {
+        minStacks = clampStacks(
+          typeof minStacksRaw === "number"
+            ? minStacksRaw
+            : Number(minStacksRaw)
+        );
+        // Legacy bare-`minStacks` entries of 0 (no `comparison` field) now
+        // migrate to [0, 6] — "no constraint" under the new model — rather
+        // than the pre-0-era implicit floor of 1, since 0 is now a valid,
+        // representable, meaningful value.
+        maxStacks =
+          maxStacksRaw === undefined
+            ? 6
+            : clampStacks(
+                typeof maxStacksRaw === "number"
+                  ? maxStacksRaw
+                  : Number(maxStacksRaw)
+              );
+      }
     } else {
       continue;
     }

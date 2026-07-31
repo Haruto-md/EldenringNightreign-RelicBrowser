@@ -144,11 +144,19 @@ pub struct SearchOutput {
     pub total_combinations_checked: u32,
 }
 
+// `u8` implements `Default` (returning 0, i.e. MATCH_MODE_EXACT), so a bare
+// `#[serde(default)]` on `match_mode` below would silently fall back to
+// exact-only matching for any payload missing the field. This codebase's
+// chosen fallback is MATCH_MODE_HIGHER_OR_EQUAL (matching the pre-match-mode
+// behavior), so a named-function default is required instead.
+fn default_match_mode() -> u8 { MATCH_MODE_HIGHER_OR_EQUAL }
+
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct SelectedEffectRange {
     pub effect_key: u32,
     pub min_stacks: u8,
     pub max_stacks: u8,
+    #[serde(default = "default_match_mode")]
     pub match_mode: u8,
 }
 
@@ -434,11 +442,12 @@ fn combination_satisfies_ranges(
     true
 }
 
-// True if `effect` satisfies required `key`: always by exact match: `key`'s
-// own match mode is `exact`, always exact-only. Otherwise a same-group
-// stackable tier, at or above `key`'s level for mode "higherOrEqual", or at
-// or below it for mode "lowerOrEqual" (mirroring combination_satisfies_ranges'
-// final-check semantics exactly, so the pruning-bonus below can never rank a
+// True if `effect` satisfies required `key`: an identical key always
+// matches. Otherwise, if `key`'s own match mode is `exact`, no tier match is
+// allowed. Otherwise, a same-group stackable tier at or above `key`'s level
+// satisfies mode `higherOrEqual`, and at or below satisfies mode
+// `lowerOrEqual` (mirroring combination_satisfies_ranges' final-check
+// semantics exactly, so the pruning-bonus below can never rank a
 // tier-satisfying triple lower than the check that ultimately decides
 // whether a full combination is valid).
 #[inline(always)]

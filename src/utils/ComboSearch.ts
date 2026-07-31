@@ -557,10 +557,11 @@ export function buildDamageWorkerInput(
   restrictToScoringRelics: boolean = true
 ): ComboSearchWorkerInput {
   // Every range's own effect (with its group/level), so the WASM final range
-  // check (combination_satisfies_ranges) can treat a same-group, higher-tier
-  // relic effect as satisfying a lower-tier must-have, for both atLeast and
-  // atMost. Only min_stacks>0 ranges additionally widen candidate eligibility
-  // below — an atMost-only range shouldn't force extra relics into the pool.
+  // check (combination_satisfies_ranges) can treat a same-group, tier-matching
+  // relic effect (per the range's match mode) as satisfying the must-have,
+  // regardless of the range's min/max bounds. Only min_stacks>0 ranges
+  // additionally widen candidate eligibility below — a min_stacks=0 range
+  // (no lower bound) shouldn't force extra relics into the pool.
   const rangeEffects = effectRanges
     .map(({ effectKey }) => getEffectByKey(effectKey as EffectKey))
     .filter((effect): effect is Effect => effect !== undefined);

@@ -70,7 +70,14 @@ describe("sanitizeMustHaves", () => {
     ]);
   });
 
-  it("clamps a legacy stacks value to 1-6 before converting (pre-0 era had no 0)", () => {
+  it("converts an even older bare stacks entry (no comparison, no minStacks/maxStacks) as atLeast", () => {
+    const legacy = [{ effectKey: 35, stacks: 2 }];
+    expect(sanitizeMustHaves(legacy)).toEqual([
+      { effectKey: 35, minStacks: 2, maxStacks: 6, matchMode: "higherOrEqual" },
+    ]);
+  });
+
+  it("clamps a legacy stacks value to 0-6 before converting (pre-0 era had no 0)", () => {
     const legacy = [{ effectKey: 40, comparison: "atLeast", stacks: 99 }];
     expect(sanitizeMustHaves(legacy)).toEqual([
       { effectKey: 40, minStacks: 6, maxStacks: 6, matchMode: "higherOrEqual" },

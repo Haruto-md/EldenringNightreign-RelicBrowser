@@ -426,6 +426,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         if (s.mustHaves.some((m) => m.effectKey === effectKey)) {
           return s;
         }
+        const effect = getEffectByKey(effectKey);
         return {
           ...s,
           mustHaves: [
@@ -434,7 +435,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
               effectKey,
               minStacks: 1,
               maxStacks: 6,
-              matchMode: "higherOrEqual" as const,
+              matchMode: effect?.group !== undefined ? "higherOrEqual" : "exact",
             },
           ],
         };
@@ -843,6 +844,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                                     e.target.value as MatchMode
                                   )
                                 }
+                                aria-label="一致モード"
                               >
                                 <MenuItem value="exact">この効果のみ</MenuItem>
                                 <MenuItem value="higherOrEqual">
@@ -870,6 +872,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                                   Number(e.target.value)
                                 )
                               }
+                              aria-label="最小スタック数"
                             >
                               {STACKS_OPTIONS.filter(
                                 (n) => n <= mustHave.maxStacks
@@ -892,6 +895,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                                   Number(e.target.value)
                                 )
                               }
+                              aria-label="最大スタック数"
                             >
                               {STACKS_OPTIONS.filter(
                                 (n) => n >= mustHave.minStacks
