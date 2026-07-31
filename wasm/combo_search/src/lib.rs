@@ -21,6 +21,12 @@ const PENALTY_FOR_MISSING_LEVEL: f32 = -0.1;
 const SELECTED_EFFECTS_SPACE: usize = 9*3;
 const RECOMMENDED_EFFECTS_SPACE: usize = 35;
 const EFFECT_KEY_SPACE: usize = 850;
+// Per-must-have match direction, stored per-effect-key (parallel to
+// selected_groups_by_key / selected_levels_by_key) since Rust's WASM
+// boundary carries it as a plain u8 rather than a Rust enum.
+const MATCH_MODE_EXACT: u8 = 0;
+const MATCH_MODE_HIGHER_OR_EQUAL: u8 = 1;
+const MATCH_MODE_LOWER_OR_EQUAL: u8 = 2;
 const EFFECT_GROUP_SPACE: usize = 30;
 // Color domain: 0=Any, 1=Red, 2=Blue, 3=Yellow, 4=Green
 const COLOR_SPACE: usize = 5;
@@ -143,6 +149,7 @@ pub struct SelectedEffectRange {
     pub effect_key: u32,
     pub min_stacks: u8,
     pub max_stacks: u8,
+    pub match_mode: u8,
 }
 
 #[inline(always)]
@@ -213,6 +220,7 @@ fn add_combination_if_unique6(
     ranges: &[(u32,u8,u8)],
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_match_mode_by_key: &[u8; EFFECT_KEY_SPACE],
     damage_mode: bool,
     damage_mults: &[f32],
     excluded_demerits: &[u32],
@@ -224,7 +232,7 @@ fn add_combination_if_unique6(
     if !seen_combinations.insert(unique_key) { return; }
 
     // Drop if out of requested stack ranges
-    if !combination_satisfies_ranges(&relic_indices6, relics_normal, relics_deep, nightfarer, ranges, selected_groups_by_key, selected_levels_by_key) { return; }
+    if !combination_satisfies_ranges(&relic_indices6, relics_normal, relics_deep, nightfarer, ranges, selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key) { return; }
 
     if damage_mode && combination_has_excluded_demerit(&relic_indices6, relics_deep, excluded_demerits) { return; }
 
@@ -393,6 +401,7 @@ fn combination_satisfies_ranges(
     ranges: &[(u32, u8, u8)],
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_match_mode_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> bool {
     if ranges.is_empty() { return true; }
     // One counter per requested range entry, in order
@@ -405,30 +414,11 @@ fn combination_satisfies_ranges(
                 // Skip effects not usable by this nightfarer if character bound
                 if let Some(nf) = effect.nightfarer { if nf != nightfarer { continue; } }
 
-                let eff_group = effect.group;
-                let eff_level = effect.level;
-
-                // Check this effect against each requested range key
+                // Check this effect against each requested range key, via the
+                // same match rule triple_covered_key_count's pruning bonus
+                // uses, so the two can never disagree on what counts.
                 for (i, (key, _min_s, _max_s)) in ranges.iter().enumerate() {
-                    let mut matches = effect.key == *key;
-                    if !matches {
-                        let k_usize = *key as usize;
-                        if k_usize < EFFECT_KEY_SPACE {
-                            // selected group/level metadata for this requested key
-                            let sel_g = unsafe { *selected_groups_by_key.get_unchecked(k_usize) };
-                            let sel_l = unsafe { *selected_levels_by_key.get_unchecked(k_usize) };
-                            if sel_g != u8::MAX && sel_l != u8::MAX {
-                                if let (Some(eg), Some(el)) = (eff_group, eff_level) {
-                                    // Only match by group/level if the effect has stacks=true
-                                    let is_stackable = effect.stacks.unwrap_or(false);
-                                    if is_stackable && eg == sel_g && el >= sel_l { 
-                                        matches = true; 
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if matches {
+                    if effect_satisfies_key(effect, *key, selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key) {
                         let c = unsafe { counts.get_unchecked_mut(i) };
                         if *c < u8::MAX { *c += 1; }
                     }
@@ -444,26 +434,32 @@ fn combination_satisfies_ranges(
     true
 }
 
-// True if `effect` satisfies required `key`, either by exact match or by
-// being a same-group, equal-or-higher stackable tier of it (mirroring
-// combination_satisfies_ranges' final-check semantics exactly, so the
-// pruning-bonus below can never rank a tier-satisfying triple lower than
-// the check that ultimately decides whether a full combination is valid).
+// True if `effect` satisfies required `key`: always by exact match: `key`'s
+// own match mode is `exact`, always exact-only. Otherwise a same-group
+// stackable tier, at or above `key`'s level for mode "higherOrEqual", or at
+// or below it for mode "lowerOrEqual" (mirroring combination_satisfies_ranges'
+// final-check semantics exactly, so the pruning-bonus below can never rank a
+// tier-satisfying triple lower than the check that ultimately decides
+// whether a full combination is valid).
 #[inline(always)]
 fn effect_satisfies_key(
     effect: &Effect,
     key: u32,
     selected_groups_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
+    selected_match_mode_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> bool {
     if effect.key == key { return true; }
     let k_usize = key as usize;
     if k_usize >= EFFECT_KEY_SPACE { return false; }
+    let mode = unsafe { *selected_match_mode_by_key.get_unchecked(k_usize) };
+    if mode == MATCH_MODE_EXACT { return false; }
     let sel_g = unsafe { *selected_groups_by_key.get_unchecked(k_usize) };
     let sel_l = unsafe { *selected_levels_by_key.get_unchecked(k_usize) };
     if sel_g == u8::MAX || sel_l == u8::MAX { return false; }
     if let (Some(eg), Some(el)) = (effect.group, effect.level) {
-        effect.stacks.unwrap_or(false) && eg == sel_g && el >= sel_l
+        if !effect.stacks.unwrap_or(false) || eg != sel_g { return false; }
+        if mode == MATCH_MODE_LOWER_OR_EQUAL { el <= sel_l } else { el >= sel_l }
     } else {
         false
     }
@@ -686,6 +682,24 @@ pub fn search_combinations(input: JsValue) -> JsValue {
         }
     }
 
+    // Match-mode is a per-must-have setting, sourced from
+    // input.selected_effect_ranges (not input.selected_effects, which only
+    // carries each effect's own group/level) — same per-key lookup shape,
+    // different source array. Keys with no must-have range default to
+    // MATCH_MODE_HIGHER_OR_EQUAL, matching the pre-match-mode behavior; this
+    // default is never actually read for a key that isn't in `ranges_vec`
+    // below, since combination_satisfies_ranges only ever looks up keys that
+    // ARE range keys.
+    let mut selected_match_mode_by_key = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
+    if let Some(ranges) = &input.selected_effect_ranges {
+        for r in ranges {
+            let k = r.effect_key as usize;
+            if k < EFFECT_KEY_SPACE {
+                selected_match_mode_by_key[k] = r.match_mode;
+            }
+        }
+    }
+
     // Precompute ranges as tuples for faster checks
     let ranges_vec: Vec<(u32,u8,u8)> = match &input.selected_effect_ranges {
         Some(v) => v.iter().map(|r| (r.effect_key, r.min_stacks, r.max_stacks)).collect(),
@@ -840,6 +854,7 @@ pub fn search_combinations(input: JsValue) -> JsValue {
                     &ranges_vec,
                     &selected_groups_by_key,
                     &selected_levels_by_key,
+                    &selected_match_mode_by_key,
                     damage_mode,
                     &damage_mults,
                     &excluded_demerits,
