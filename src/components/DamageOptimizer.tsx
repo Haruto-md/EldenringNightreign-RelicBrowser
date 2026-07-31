@@ -1,6 +1,4 @@
 import DeleteIcon from "@mui/icons-material/Delete";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import {
   Alert,
   Box,
@@ -20,7 +18,6 @@ import {
   type SelectChangeEvent,
   Stack,
   Switch,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -51,12 +48,14 @@ import {
   type DamageProfileSelection,
 } from "../utils/DamageMultiplierArray";
 import { effectNameJa } from "../utils/effectNameJa";
+import { getEffectByKey } from "../utils/DataUtils";
 import { getChipColor, RelicSlotColor } from "../utils/RelicColor";
 import { isNightfarer, Nightfarer, nightfarers } from "../utils/Nightfarers";
 import { DamageRelicSlot } from "./DamageRelicSlot";
 import {
   mustHaveToEffectRange,
   sanitizeMustHaves,
+  type MatchMode,
   type MustHaveEntry,
 } from "./DamageOptimizer.mustHave";
 import { EffectsAutocomplete } from "./EffectsAutocomplete";
@@ -65,7 +64,7 @@ import { EffectsAutocomplete } from "./EffectsAutocomplete";
 const SETTINGS_STORAGE_KEY = "damageOpt:settings:v2";
 const SELECTED_NIGHTFARER_STORAGE_KEY = "damageOpt:selectedNightfarer:v1";
 
-const MIN_STACKS_OPTIONS = [1, 2, 3, 4, 5, 6];
+const STACKS_OPTIONS = [0, 1, 2, 3, 4, 5, 6];
 
 const DEFAULT_ELEMENT = "physical" as const;
 const DEFAULT_PRIMARY_CATEGORY_ID = primaryCategories[0]?.id ?? "weapon:dagger";
@@ -431,7 +430,12 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
           ...s,
           mustHaves: [
             ...s.mustHaves,
-            { effectKey, comparison: "atLeast" as const, stacks: 1 },
+            {
+              effectKey,
+              minStacks: 1,
+              maxStacks: 6,
+              matchMode: "higherOrEqual" as const,
+            },
           ],
         };
       });
@@ -449,24 +453,40 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     [updateCurrent]
   );
 
-  const setMustHaveStacks = useCallback(
-    (effectKey: number, stacks: number) => {
+  const setMustHaveMinStacks = useCallback(
+    (effectKey: number, minStacks: number) => {
       updateCurrent((s) => ({
         ...s,
         mustHaves: s.mustHaves.map((m) =>
-          m.effectKey === effectKey ? { ...m, stacks } : m
+          m.effectKey === effectKey
+            ? { ...m, minStacks, maxStacks: Math.max(m.maxStacks, minStacks) }
+            : m
         ),
       }));
     },
     [updateCurrent]
   );
 
-  const setMustHaveComparison = useCallback(
-    (effectKey: number, comparison: MustHaveEntry["comparison"]) => {
+  const setMustHaveMaxStacks = useCallback(
+    (effectKey: number, maxStacks: number) => {
       updateCurrent((s) => ({
         ...s,
         mustHaves: s.mustHaves.map((m) =>
-          m.effectKey === effectKey ? { ...m, comparison } : m
+          m.effectKey === effectKey
+            ? { ...m, maxStacks, minStacks: Math.min(m.minStacks, maxStacks) }
+            : m
+        ),
+      }));
+    },
+    [updateCurrent]
+  );
+
+  const setMustHaveMatchMode = useCallback(
+    (effectKey: number, matchMode: MatchMode) => {
+      updateCurrent((s) => ({
+        ...s,
+        mustHaves: s.mustHaves.map((m) =>
+          m.effectKey === effectKey ? { ...m, matchMode } : m
         ),
       }));
     },
@@ -791,78 +811,109 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
             />
             {current.mustHaves.length > 0 && (
               <Stack spacing={1} sx={{ mt: 1, maxHeight: 320, overflowY: "auto" }}>
-                {current.mustHaves.map((mustHave) => (
-                  <Card key={mustHave.effectKey} elevation={2}>
-                    <CardContent
-                      sx={{ px: 1.5, py: 0.5, "&:last-child": { paddingBottom: 0.5 } }}
-                    >
-                      <Typography
-                        variant="body2"
-                        fontWeight="bold"
-                        sx={{ mb: 0.5 }}
+                {current.mustHaves.map((mustHave) => {
+                  const effect = getEffectByKey(mustHave.effectKey as EffectKey);
+                  const hasGroup = effect?.group !== undefined;
+                  return (
+                    <Card key={mustHave.effectKey} elevation={2}>
+                      <CardContent
+                        sx={{ px: 1.5, py: 0.5, "&:last-child": { paddingBottom: 0.5 } }}
                       >
-                        {effectNameJa(mustHave.effectKey as EffectKey)}
-                      </Typography>
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        justifyContent="flex-end"
-                        spacing={0.5}
-                      >
-                        <Tooltip
-                          title={
-                            mustHave.comparison === "atLeast"
-                              ? "この数値以上（クリックで「以下」に切り替え）"
-                              : "この数値以下（クリックで「以上」に切り替え）"
-                          }
+                        <Typography
+                          variant="body2"
+                          fontWeight="bold"
+                          sx={{ mb: 0.5 }}
                         >
+                          {effectNameJa(mustHave.effectKey as EffectKey)}
+                        </Typography>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          justifyContent="flex-end"
+                          spacing={0.5}
+                          flexWrap="wrap"
+                        >
+                          {hasGroup ? (
+                            <FormControl size="small" sx={{ minWidth: 170 }}>
+                              <Select
+                                value={mustHave.matchMode}
+                                onChange={(e) =>
+                                  setMustHaveMatchMode(
+                                    mustHave.effectKey,
+                                    e.target.value as MatchMode
+                                  )
+                                }
+                              >
+                                <MenuItem value="exact">この効果のみ</MenuItem>
+                                <MenuItem value="higherOrEqual">
+                                  この効果以上（同グループ）
+                                </MenuItem>
+                                <MenuItem value="lowerOrEqual">
+                                  この効果以下（同グループ）
+                                </MenuItem>
+                              </Select>
+                            </FormControl>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              完全一致
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.secondary">
+                            最小
+                          </Typography>
+                          <FormControl size="small" sx={{ minWidth: 64 }}>
+                            <Select
+                              value={String(mustHave.minStacks)}
+                              onChange={(e) =>
+                                setMustHaveMinStacks(
+                                  mustHave.effectKey,
+                                  Number(e.target.value)
+                                )
+                              }
+                            >
+                              {STACKS_OPTIONS.filter(
+                                (n) => n <= mustHave.maxStacks
+                              ).map((n) => (
+                                <MenuItem key={n} value={String(n)}>
+                                  {n}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <Typography variant="caption" color="text.secondary">
+                            〜最大
+                          </Typography>
+                          <FormControl size="small" sx={{ minWidth: 64 }}>
+                            <Select
+                              value={String(mustHave.maxStacks)}
+                              onChange={(e) =>
+                                setMustHaveMaxStacks(
+                                  mustHave.effectKey,
+                                  Number(e.target.value)
+                                )
+                              }
+                            >
+                              {STACKS_OPTIONS.filter(
+                                (n) => n >= mustHave.minStacks
+                              ).map((n) => (
+                                <MenuItem key={n} value={String(n)}>
+                                  {n}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
                           <IconButton
                             size="small"
-                            aria-label="以上/以下を切り替え"
-                            onClick={() =>
-                              setMustHaveComparison(
-                                mustHave.effectKey,
-                                mustHave.comparison === "atLeast"
-                                  ? "atMost"
-                                  : "atLeast"
-                              )
-                            }
+                            aria-label="削除"
+                            onClick={() => removeMustHave(mustHave.effectKey)}
                           >
-                            {mustHave.comparison === "atLeast" ? (
-                              <KeyboardArrowUpIcon fontSize="small" />
-                            ) : (
-                              <KeyboardArrowDownIcon fontSize="small" />
-                            )}
+                            <DeleteIcon fontSize="small" />
                           </IconButton>
-                        </Tooltip>
-                        <FormControl size="small" sx={{ minWidth: 72 }}>
-                          <Select
-                            value={String(mustHave.stacks)}
-                            onChange={(e) =>
-                              setMustHaveStacks(
-                                mustHave.effectKey,
-                                Number(e.target.value)
-                              )
-                            }
-                          >
-                            {MIN_STACKS_OPTIONS.map((n) => (
-                              <MenuItem key={n} value={String(n)}>
-                                {n}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <IconButton
-                          size="small"
-                          aria-label="削除"
-                          onClick={() => removeMustHave(mustHave.effectKey)}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ))}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </Stack>
             )}
           </Box>
