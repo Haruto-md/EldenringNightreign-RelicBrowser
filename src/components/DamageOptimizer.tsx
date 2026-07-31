@@ -1011,7 +1011,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                 size="small"
               />
             }
-            label="ダメージ倍率が1倍以下のレリックも候補に含める（検索が遅くなります）"
+            label="ダメージ倍率が1倍以下の遺物も候補に含める（検索が遅くなります）"
           />
         </Box>
 

@@ -1,5 +1,2 @@
 User-agent: *
 Allow: /
-
-# Sitemap
-Sitemap: https://relicbrowser.com/sitemap.xml
