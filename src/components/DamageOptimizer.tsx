@@ -1,4 +1,5 @@
 import DeleteIcon from "@mui/icons-material/Delete";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   Alert,
   Box,
@@ -30,7 +31,6 @@ import {
   sorcerySchools,
   type PrimaryCategory,
 } from "../resources/damageCategories";
-import { demeritEffects } from "../resources/demeritEffects";
 import { EffectKey } from "../resources/effectKeys";
 import { nightfarerNamesJa } from "../resources/nightfarerNamesJa";
 import { vesselNamesJa } from "../resources/vesselNamesJa";
@@ -166,7 +166,6 @@ interface DamageOptSettings {
   element: DamageOptElement | null;
   enabledAttackModes: string[];
   mustHaves: MustHaveEntry[];
-  excludedDemerits: number[];
   disabledVessels: string[];
   // When true (default), only relics carrying an effect that boosts damage
   // (>1.0x) or is named by a must-have are considered as search candidates,
@@ -183,7 +182,6 @@ function createDefaultSettings(): DamageOptSettings {
     element: DEFAULT_ELEMENT,
     enabledAttackModes: [],
     mustHaves: [],
-    excludedDemerits: [],
     disabledVessels: [],
     restrictToScoringRelics: true,
   };
@@ -196,15 +194,6 @@ function createInitialSettings(): Record<Nightfarer, DamageOptSettings> {
     out[nf] = createDefaultSettings();
   });
   return out;
-}
-
-function sanitizeNumberArray(value: unknown): number[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((v) => (typeof v === "number" ? v : Number(v)))
-    .filter((v) => Number.isFinite(v));
 }
 
 function sanitizeStringArray(value: unknown): string[] {
@@ -251,7 +240,6 @@ function loadSettingsFromStorage(): Record<Nightfarer, DamageOptSettings> {
         val.enabledAttackModes
       );
       current.mustHaves = sanitizeMustHaves(val.mustHaves);
-      current.excludedDemerits = sanitizeNumberArray(val.excludedDemerits);
       current.disabledVessels = sanitizeStringArray(val.disabledVessels);
       current.restrictToScoringRelics =
         typeof val.restrictToScoringRelics === "boolean"
@@ -301,6 +289,10 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
   const [settings, setSettings] = useState<
     Record<Nightfarer, DamageOptSettings>
   >(() => loadSettingsFromStorage());
+
+  // Vessel selection is rarely touched, so keep it collapsed by default to
+  // leave more room for the (potentially long) 条件 list above it.
+  const [vesselSectionOpen, setVesselSectionOpen] = useState(false);
 
   useEffect(() => {
     saveSettingsToStorage(settings);
@@ -494,21 +486,6 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     [updateCurrent]
   );
 
-  const toggleDemerit = useCallback(
-    (key: EffectKey) => {
-      updateCurrent((s) => {
-        const has = s.excludedDemerits.includes(key);
-        return {
-          ...s,
-          excludedDemerits: has
-            ? s.excludedDemerits.filter((k) => k !== key)
-            : [...s.excludedDemerits, key],
-        };
-      });
-    },
-    [updateCurrent]
-  );
-
   const toggleRestrictToScoringRelics = useCallback(() => {
     updateCurrent((s) => ({
       ...s,
@@ -612,7 +589,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
         deepRelics,
         enabledVessels,
         multiplierArray,
-        current.excludedDemerits,
+        [],
         effectRanges,
         current.restrictToScoringRelics,
         (p: ComboSearchProgress) => {
@@ -644,7 +621,6 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
     currentSlot.relics,
     enabledVessels,
     multiplierArray,
-    current.excludedDemerits,
     current.mustHaves,
     current.restrictToScoringRelics,
   ]);
@@ -687,90 +663,95 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
           maxHeight: "100%",
           display: "flex",
           flexDirection: "column",
-          overflowY: "auto",
           pr: 2,
+          pt: 1,
         }}
       >
-        <Stack spacing={2.5}>
-          <FormControl fullWidth size="small">
-            <InputLabel id="damage-opt-nightfarer-label">
-              キャラクター
-            </InputLabel>
-            <Select
-              labelId="damage-opt-nightfarer-label"
-              label="キャラクター"
-              value={String(selectedNightfarer)}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (isNightfarer(v)) {
-                  setSelectedNightfarer(v);
-                }
-              }}
-            >
-              {Object.keys(nightfarers).map((key) => {
-                const k = Number(key) as Nightfarer;
-                return (
-                  <MenuItem key={key} value={String(k)}>
-                    {nightfarerNamesJa[k]}
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
-
-          <FormControl fullWidth size="small">
-            <InputLabel id="damage-opt-primary-category-label">
-              攻撃カテゴリ
-            </InputLabel>
-            <Select
-              labelId="damage-opt-primary-category-label"
-              label="攻撃カテゴリ"
-              value={current.primaryCategoryId}
-              onChange={handlePrimaryCategoryChange}
-            >
-              {primaryCategories.map((cat) => (
-                <MenuItem key={cat.id} value={cat.id}>
-                  {primaryCategoryLabel(cat)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {showSchool && (
-            <FormControl fullWidth size="small">
-              <InputLabel id="damage-opt-school-label">系統</InputLabel>
+        {/* Fixed build-config header: stays visible while 条件/聖杯 scroll below */}
+        <Stack spacing={1} sx={{ flexShrink: 0 }}>
+          <Stack direction="row" spacing={1}>
+            <FormControl fullWidth size="small" sx={{ flex: 1 }}>
+              <InputLabel id="damage-opt-nightfarer-label">
+                キャラクター
+              </InputLabel>
               <Select
-                labelId="damage-opt-school-label"
-                label="系統"
-                value={current.schoolId ?? ""}
-                onChange={handleSchoolChange}
+                labelId="damage-opt-nightfarer-label"
+                label="キャラクター"
+                value={String(selectedNightfarer)}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (isNightfarer(v)) {
+                    setSelectedNightfarer(v);
+                  }
+                }}
               >
-                <MenuItem value="">なし</MenuItem>
-                {schoolOptions.map((school) => (
-                  <MenuItem key={school.id} value={school.id}>
-                    {schoolLabels[school.id] ?? school.id}
+                {Object.keys(nightfarers).map((key) => {
+                  const k = Number(key) as Nightfarer;
+                  return (
+                    <MenuItem key={key} value={String(k)}>
+                      {nightfarerNamesJa[k]}
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small" sx={{ flex: 1 }}>
+              <InputLabel id="damage-opt-primary-category-label">
+                攻撃カテゴリ
+              </InputLabel>
+              <Select
+                labelId="damage-opt-primary-category-label"
+                label="攻撃カテゴリ"
+                value={current.primaryCategoryId}
+                onChange={handlePrimaryCategoryChange}
+              >
+                {primaryCategories.map((cat) => (
+                  <MenuItem key={cat.id} value={cat.id}>
+                    {primaryCategoryLabel(cat)}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          )}
+          </Stack>
 
-          <FormControl fullWidth size="small">
-            <InputLabel id="damage-opt-element-label">属性</InputLabel>
-            <Select
-              labelId="damage-opt-element-label"
-              label="属性"
-              value={current.element ?? ""}
-              onChange={handleElementChange}
-            >
-              <MenuItem value="">無属性</MenuItem>
-              {damageElements.map((el) => (
-                <MenuItem key={el.id} value={el.id}>
-                  {elementLabels[el.id] ?? el.id}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Stack direction="row" spacing={1}>
+            {showSchool && (
+              <FormControl fullWidth size="small" sx={{ flex: 1 }}>
+                <InputLabel id="damage-opt-school-label">系統</InputLabel>
+                <Select
+                  labelId="damage-opt-school-label"
+                  label="系統"
+                  value={current.schoolId ?? ""}
+                  onChange={handleSchoolChange}
+                >
+                  <MenuItem value="">なし</MenuItem>
+                  {schoolOptions.map((school) => (
+                    <MenuItem key={school.id} value={school.id}>
+                      {schoolLabels[school.id] ?? school.id}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <FormControl fullWidth size="small" sx={{ flex: 1 }}>
+              <InputLabel id="damage-opt-element-label">属性</InputLabel>
+              <Select
+                labelId="damage-opt-element-label"
+                label="属性"
+                value={current.element ?? ""}
+                onChange={handleElementChange}
+              >
+                <MenuItem value="">無属性</MenuItem>
+                {damageElements.map((el) => (
+                  <MenuItem key={el.id} value={el.id}>
+                    {elementLabels[el.id] ?? el.id}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
 
           {showAttackModes && (
             <Box>
@@ -796,10 +777,16 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
               </Stack>
             </Box>
           )}
+        </Stack>
 
-          <Box>
+        <Divider sx={{ my: 1.5, flexShrink: 0 }} />
+
+        {/* Scrollable: 条件 (long list) + 聖杯 (rarely touched, collapsed by default) */}
+        <Box sx={{ flexGrow: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          {/* Fixed: 条件 header and search box */}
+          <Box sx={{ flexShrink: 0, pr: 1 }}>
             <Typography variant="subtitle2" gutterBottom>
-              必須効果
+              条件
             </Typography>
             <EffectsAutocomplete
               onSearchChange={() => {}}
@@ -810,146 +797,157 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
               clearOnSelect
               groupByCategory
             />
-            {current.mustHaves.length > 0 && (
-              <Stack spacing={1} sx={{ mt: 1, maxHeight: 320, overflowY: "auto" }}>
-                {current.mustHaves.map((mustHave) => {
-                  const effect = getEffectByKey(mustHave.effectKey as EffectKey);
-                  const hasGroup = effect?.group !== undefined;
-                  return (
-                    <Card key={mustHave.effectKey} elevation={2}>
-                      <CardContent
-                        sx={{ px: 1.5, py: 0.5, "&:last-child": { paddingBottom: 0.5 } }}
+          </Box>
+
+          {/* Scrollable: must-have condition cards */}
+          {current.mustHaves.length > 0 && (
+            <Stack spacing={1} sx={{ mt: 1, flexGrow: 1, minHeight: 0, overflowY: "auto", pr: 1 }}>
+              {current.mustHaves.map((mustHave) => {
+                const effect = getEffectByKey(mustHave.effectKey as EffectKey);
+                const hasGroup = effect?.group !== undefined;
+                return (
+                  <Card
+                    key={mustHave.effectKey}
+                    elevation={2}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    <CardContent
+                      sx={{ px: 1.5, py: 0.5, "&:last-child": { paddingBottom: 0.5 } }}
+                    >
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        sx={{ mb: 0.5 }}
                       >
-                        <Typography
-                          variant="body2"
-                          fontWeight="bold"
-                          sx={{ mb: 0.5 }}
-                        >
-                          {effectNameJa(mustHave.effectKey as EffectKey)}
-                        </Typography>
-                        <Stack
-                          direction="row"
-                          alignItems="center"
-                          justifyContent="flex-end"
-                          spacing={0.5}
-                          flexWrap="wrap"
-                        >
-                          {hasGroup ? (
-                            <FormControl size="small" sx={{ minWidth: 170 }}>
-                              <Select
-                                value={mustHave.matchMode}
-                                onChange={(e) =>
-                                  setMustHaveMatchMode(
-                                    mustHave.effectKey,
-                                    e.target.value as MatchMode
-                                  )
-                                }
-                                aria-label="一致モード"
-                              >
-                                <MenuItem value="exact">この効果のみ</MenuItem>
-                                <MenuItem value="higherOrEqual">
-                                  この効果以上（同グループ）
-                                </MenuItem>
-                                <MenuItem value="lowerOrEqual">
-                                  この効果以下（同グループ）
-                                </MenuItem>
-                              </Select>
-                            </FormControl>
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">
-                              完全一致
-                            </Typography>
-                          )}
-                          <Typography variant="caption" color="text.secondary">
-                            最小
-                          </Typography>
-                          <FormControl size="small" sx={{ minWidth: 64 }}>
+                        {effectNameJa(mustHave.effectKey as EffectKey)}
+                      </Typography>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="flex-end"
+                        spacing={1}
+                      >
+                        {hasGroup ? (
+                          <FormControl size="small" sx={{ minWidth: 90 }}>
                             <Select
-                              value={String(mustHave.minStacks)}
+                              value={mustHave.matchMode}
                               onChange={(e) =>
-                                setMustHaveMinStacks(
+                                setMustHaveMatchMode(
                                   mustHave.effectKey,
-                                  Number(e.target.value)
+                                  e.target.value as MatchMode
                                 )
                               }
-                              aria-label="最小スタック数"
+                              sx={{ fontSize: "0.875rem" }}
+                              aria-label="マッチモード"
                             >
-                              {STACKS_OPTIONS.filter(
-                                (n) => n <= mustHave.maxStacks
-                              ).map((n) => (
-                                <MenuItem key={n} value={String(n)}>
-                                  {n}
-                                </MenuItem>
-                              ))}
+                              <MenuItem value="exact" sx={{ fontSize: "0.875rem", py: 0.5 }}>一致</MenuItem>
+                              <MenuItem value="higherOrEqual" sx={{ fontSize: "0.875rem", py: 0.5 }}>上位</MenuItem>
+                              <MenuItem value="lowerOrEqual" sx={{ fontSize: "0.875rem", py: 0.5 }}>下位</MenuItem>
                             </Select>
                           </FormControl>
-                          <Typography variant="caption" color="text.secondary">
-                            〜最大
-                          </Typography>
-                          <FormControl size="small" sx={{ minWidth: 64 }}>
-                            <Select
-                              value={String(mustHave.maxStacks)}
-                              onChange={(e) =>
-                                setMustHaveMaxStacks(
-                                  mustHave.effectKey,
-                                  Number(e.target.value)
-                                )
-                              }
-                              aria-label="最大スタック数"
-                            >
-                              {STACKS_OPTIONS.filter(
-                                (n) => n >= mustHave.minStacks
-                              ).map((n) => (
-                                <MenuItem key={n} value={String(n)}>
-                                  {n}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          <IconButton
-                            size="small"
-                            aria-label="削除"
-                            onClick={() => removeMustHave(mustHave.effectKey)}
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ flexGrow: 1 }}
                           >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </Stack>
-            )}
-          </Box>
-
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              除外するデメリット
-            </Typography>
-            <Stack sx={{ maxHeight: 260, overflowY: "auto" }}>
-              {demeritEffects.map((demerit) => (
-                <FormControlLabel
-                  key={demerit.key}
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={current.excludedDemerits.includes(
-                        demerit.key
-                      )}
-                      onChange={() => toggleDemerit(demerit.key)}
-                    />
-                  }
-                  label={demerit.jaName}
-                />
-              ))}
+                            {/* nothing */}
+                          </Typography>
+                        )}
+                        <Box sx={{ flexGrow: 1 }} />
+                        <Typography variant="body2" color="text.secondary">
+                          個数
+                        </Typography>
+                        <FormControl size="small" sx={{ minWidth: 72 }}>
+                          <Select
+                            value={String(mustHave.minStacks)}
+                            onChange={(e) =>
+                              setMustHaveMinStacks(
+                                mustHave.effectKey,
+                                Number(e.target.value)
+                              )
+                            }
+                            sx={{ fontSize: "0.875rem" }}
+                            aria-label="最小スタック数"
+                          >
+                            {STACKS_OPTIONS.map((n) => (
+                              <MenuItem key={n} value={String(n)} sx={{ fontSize: "0.875rem", py: 0.5 }}>
+                                {n}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Typography variant="body2" color="text.secondary">
+                          〜
+                        </Typography>
+                        <FormControl size="small" sx={{ minWidth: 72 }}>
+                          <Select
+                            value={String(mustHave.maxStacks)}
+                            onChange={(e) =>
+                              setMustHaveMaxStacks(
+                                mustHave.effectKey,
+                                Number(e.target.value)
+                              )
+                            }
+                            sx={{ fontSize: "0.875rem" }}
+                            aria-label="最大スタック数"
+                          >
+                            {STACKS_OPTIONS.map((n) => (
+                              <MenuItem key={n} value={String(n)} sx={{ fontSize: "0.875rem", py: 0.5 }}>
+                                {n}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <IconButton
+                          size="small"
+                          aria-label="削除"
+                          onClick={() => removeMustHave(mustHave.effectKey)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </Stack>
-          </Box>
+          )}
+        </Box>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
+        {/* Fixed footer, below the scroll area: rarely touched, so it never
+            competes with 条件 for scroll space and is always reachable
+            without scrolling past a long condition list. */}
+        <Box sx={{ flexShrink: 0, pt: 1 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            sx={{ cursor: "pointer" }}
+            onClick={() => setVesselSectionOpen((prev) => !prev)}
+          >
+            <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
               聖杯
             </Typography>
-            <Stack gap={0.5}>
+            {current.disabledVessels.length > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                （{current.disabledVessels.length}件除外中）
+              </Typography>
+            )}
+            <IconButton
+              size="small"
+              aria-label={vesselSectionOpen ? "聖杯を閉じる" : "聖杯を開く"}
+              sx={{
+                ml: "auto",
+                transform: vesselSectionOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.15s",
+              }}
+            >
+              <ExpandMoreIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+          {vesselSectionOpen && (
+            <Stack gap={0.5} sx={{ maxHeight: 240, overflowY: "auto" }}>
               {nightfarerData.vessels.map((vessel) => {
                 const disabled = current.disabledVessels.includes(
                   vessel.name
@@ -959,7 +957,7 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                     key={vessel.name}
                     onClick={() => toggleVessel(vessel.name)}
                     elevation={disabled ? 1 : 2}
-                    sx={{ cursor: "pointer" }}
+                    sx={{ cursor: "pointer", flexShrink: 0 }}
                   >
                     <CardContent
                       sx={{
@@ -1013,8 +1011,8 @@ export function DamageOptimizer(props: DamageOptimizerProps) {
                 );
               })}
             </Stack>
-          </Box>
-        </Stack>
+          )}
+        </Box>
       </Box>
 
       <Divider orientation="vertical" flexItem />
