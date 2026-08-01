@@ -540,9 +540,26 @@ fn search_group_triples(
     selected_levels_by_key: &[u8; EFFECT_KEY_SPACE],
     selected_match_mode_by_key: &[u8; EFFECT_KEY_SPACE],
 ) -> (Vec<([Option<usize>;3], f32, u8)>, u32) {
-    let mut local_results: Vec<([Option<usize>;3], f32, u8)> = Vec::with_capacity(TOP_GROUP_RESULTS);
+    // Retention is split into two independently-capped pools rather than one
+    // combined top-TOP_GROUP_RESULTS list ranked by (covered_count, points).
+    // A coverage-first ranking is correct for atLeast-only must-haves (more
+    // coverage is strictly better), but it starves atMost/exact constraints:
+    // satisfying "key X exactly N times" across the full 6-slot combo can
+    // require THIS group to contribute ZERO occurrences of X (because the
+    // other group already covers it), yet a coverage-first ranking always
+    // ranks any covering triple above a zero-covering one regardless of
+    // points. If enough triples happen to cover X, zero-coverage triples get
+    // squeezed out of the pool entirely, leaving no valid pairing at the
+    // merge step even though one exists. `pts_results` is a coverage-blind,
+    // points-only reserved half, so zero-coverage triples always have room
+    // to survive alongside the coverage-favoring half.
+    const COV_CAP: usize = TOP_GROUP_RESULTS / 2;
+    const PTS_CAP: usize = TOP_GROUP_RESULTS - COV_CAP;
+    let mut cov_results: Vec<([Option<usize>;3], f32, u8)> = Vec::with_capacity(COV_CAP);
+    let mut pts_results: Vec<([Option<usize>;3], f32, u8)> = Vec::with_capacity(PTS_CAP);
     let mut local_seen: HashSet<u32> = HashSet::new();
-    let mut min_tracker: (usize, (u8, f32)) = (0, (u8::MAX, f32::INFINITY));
+    let mut cov_min_tracker: (usize, (u8, f32)) = (0, (u8::MAX, f32::INFINITY));
+    let mut pts_min_tracker: (usize, f32) = (0, f32::INFINITY);
     let mut score_ctx = ScoreContext::new();
     let mut checked_local: u32 = 0;
 
@@ -625,25 +642,42 @@ fn search_group_triples(
                 let unique_key = pack_triple_key(group_indices);
                 if !local_seen.insert(unique_key) { return; }
 
-                if local_results.len() < TOP_GROUP_RESULTS {
-                    local_results.push((group_indices, points, covered_count));
-                    if triple_key_less(this_priority, min_tracker.1) {
-                        min_tracker = (local_results.len() - 1, this_priority);
+                // Coverage-favoring pool (existing behavior, halved capacity).
+                if cov_results.len() < COV_CAP {
+                    cov_results.push((group_indices, points, covered_count));
+                    if triple_key_less(this_priority, cov_min_tracker.1) {
+                        cov_min_tracker = (cov_results.len() - 1, this_priority);
                     }
-                    return;
+                } else if triple_key_less(cov_min_tracker.1, this_priority) {
+                    let min_i = cov_min_tracker.0;
+                    cov_results[min_i] = (group_indices, points, covered_count);
+                    let mut new_min_i = 0usize;
+                    let mut new_min_p = (cov_results[0].2, cov_results[0].1);
+                    for (i, r) in cov_results.iter().enumerate().skip(1) {
+                        let p = (r.2, r.1);
+                        if triple_key_less(p, new_min_p) { new_min_p = p; new_min_i = i; }
+                    }
+                    cov_min_tracker = (new_min_i, new_min_p);
                 }
-                if !triple_key_less(min_tracker.1, this_priority) { return; }
-                // Replace min
-                let min_i = min_tracker.0;
-                local_results[min_i] = (group_indices, points, covered_count);
-                // Recompute min
-                let mut new_min_i = 0usize;
-                let mut new_min_p = (local_results[0].2, local_results[0].1);
-                for (i, r) in local_results.iter().enumerate().skip(1) {
-                    let p = (r.2, r.1);
-                    if triple_key_less(p, new_min_p) { new_min_p = p; new_min_i = i; }
+
+                // Points-only pool, coverage-blind: guarantees zero-coverage
+                // triples always have a reserved place regardless of how many
+                // higher-coverage triples exist elsewhere in this group.
+                if pts_results.len() < PTS_CAP {
+                    pts_results.push((group_indices, points, covered_count));
+                    if points < pts_min_tracker.1 {
+                        pts_min_tracker = (pts_results.len() - 1, points);
+                    }
+                } else if points > pts_min_tracker.1 {
+                    let min_i = pts_min_tracker.0;
+                    pts_results[min_i] = (group_indices, points, covered_count);
+                    let mut new_min_i = 0usize;
+                    let mut new_min_p = pts_results[0].1;
+                    for (i, r) in pts_results.iter().enumerate().skip(1) {
+                        if r.1 < new_min_p { new_min_p = r.1; new_min_i = i; }
+                    }
+                    pts_min_tracker = (new_min_i, new_min_p);
                 }
-                min_tracker = (new_min_i, new_min_p);
             };
             if valid_a.is_empty() && valid_b.is_empty() { emit(None, None); }
             else if !valid_a.is_empty() && !valid_b.is_empty() {
@@ -653,6 +687,12 @@ fn search_group_triples(
             } else if !valid_a.is_empty() { for &a in &valid_a { emit(Some(a), None); } } else { for &b in &valid_b { emit(None, Some(b)); } }
         }
     }
+
+    // Merge both pools. A triple can legitimately appear in both (it was good
+    // enough on points alone AND on coverage) - that's fine, the merge/final
+    // range check downstream dedupes full 6-slot combinations independently.
+    let mut local_results = cov_results;
+    local_results.extend(pts_results);
 
     // Ensure at least an empty triple so merging can still happen when this group has no relics
     if local_results.is_empty() { local_results.push(([None, None, None], 0.0, 0)); }
