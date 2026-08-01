@@ -221,7 +221,6 @@ self.onmessage = async (event: MessageEvent<ComboSearchWorkerRequest>) => {
 
     // Prepare input for WASM
     const input = buildWasmInput(payload);
-    console.log("WASM input:", JSON.stringify(input, null, 2));
 
     // Perform the search
     const wasmResult = search_combinations(input) as {

@@ -722,11 +722,15 @@ pub fn search_combinations(input: JsValue) -> JsValue {
     // Keys named by a must-have range (min_stacks > 0). In damage mode these
     // must also qualify a relic as a candidate — see is_damage_mode_candidate.
     let mut range_min_keys = [false; EFFECT_KEY_SPACE];
+    // Also track max-only constraints (min=0, max<MAX) so top-K pruning doesn't
+    // evict triples that happen to satisfy a maxStacks constraint but score low
     let mut range_keys: Vec<u32> = Vec::new();
-    for (k, min, _max) in &ranges_vec {
-        if *min > 0 {
+    for (k, min, max) in &ranges_vec {
+        let has_min_constraint = *min > 0;
+        let has_max_constraint = *max < u8::MAX;
+        if has_min_constraint || has_max_constraint {
             let ku = *k as usize;
-            if ku < EFFECT_KEY_SPACE { range_min_keys[ku] = true; }
+            if ku < EFFECT_KEY_SPACE && has_min_constraint { range_min_keys[ku] = true; }
             range_keys.push(*k);
         }
     }
