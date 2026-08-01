@@ -613,13 +613,13 @@ fn search_group_triples(
                 // distinct required keys above ones covering fewer so top-K pruning
                 // can never discard the only triple capable of jointly satisfying
                 // several must-have ranges in favor of a higher-damage triple that
-                // only covers one of them. This applies in ALL modes (damage and
-                // non-damage), since must-have constraints can cause valid triples to
-                // be wrongly evicted during top-K pruning if coverage isn't tracked.
-                let covered_count = triple_covered_key_count(
-                    &full_indices6, relics_normal, relics_deep, nightfarer, range_keys,
-                    selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key
-                );
+                // only covers one of them.
+                let covered_count = if damage_mode {
+                    triple_covered_key_count(
+                        &full_indices6, relics_normal, relics_deep, nightfarer, range_keys,
+                        selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key
+                    )
+                } else { 0 };
                 let this_priority = (covered_count, points);
 
                 let unique_key = pack_triple_key(group_indices);
