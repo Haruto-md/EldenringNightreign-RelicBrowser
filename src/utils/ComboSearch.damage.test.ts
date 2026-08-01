@@ -28,6 +28,16 @@ function makeRelic(itemId: number, effect: Effect): RelicSlot {
   } as RelicSlot;
 }
 
+function makeMultiEffectRelic(itemId: number, effects: Effect[]): RelicSlot {
+  return {
+    id: testRelicId++,
+    itemId,
+    effects: effects.map((e) => [e]),
+    coordinates: [0, 0],
+    coordinatesByColor: [0, 0],
+  } as RelicSlot;
+}
+
 describe("ComboSearch damage mode", () => {
   beforeAll(async () => {
     await init();
@@ -634,4 +644,112 @@ describe("ComboSearch damage mode", () => {
     const exactNames = exactInput.relics.map((r) => r.id).sort();
     expect(exactNames).toEqual([exactTierRelic.id, ...decoyIds].sort());
   });
+
+  it(
+    "finds a valid combination when two exact-count must-haves must be split across the normal and deep groups",
+    { timeout: 30000 },
+    () => {
+      // Regression test for a real bug reported against the Damage
+      // Optimizer: requiring exactly 1 of effect A AND exactly 1 of effect
+      // B (both matchMode "exact", neither carrying a damage multiplier)
+      // returned zero results even though a satisfying 6-relic combination
+      // existed. Root cause: search_group_triples' top-K retention ranked
+      // triples by (covered_count, points), which is correct for
+      // atLeast-only must-haves but backfires for exact/atMost ones - a
+      // group sometimes needs to contribute ZERO occurrences of a required
+      // key (because the other group already supplies it), yet a
+      // coverage-first ranking always ranks any covering triple above a
+      // zero-covering one, regardless of points. With enough triples tied
+      // on points but covering the key, the zero-coverage triples got
+      // squeezed out of the group's pool entirely, so no valid pairing
+      // ever reached the final range check.
+      //
+      // Setup: the deep group's only valid contribution is a single relic
+      // carrying BOTH required effects (A and B) at once - the normal
+      // group must therefore contribute ZERO of either. Every normal-color
+      // candidate (decoys and "noise" relics alike) carries the same real
+      // damage multiplier, so all normal triples tie on points regardless
+      // of whether they include a noise relic - isolating the
+      // coverage-vs-zero-coverage retention bug from any point-based
+      // advantage.
+      const meleeEffect = getEffectByKey(EffectKey.improvedMeleeAttackPower);
+      const effectA = getEffectByKey(EffectKey.strengthPlus1);
+      const effectB = getEffectByKey(EffectKey.dexterityPlus1);
+      assert(meleeEffect !== undefined);
+      assert(effectA !== undefined);
+      assert(effectB !== undefined);
+
+      const RED_ITEM_ID = 102;
+      const BLUE_ITEM_ID = 10001;
+
+      // Decoys placed first (lower relic indices) so they're the first
+      // candidates search_group_triples' enumeration tries for the normal
+      // (red) group - they must survive the top-K cut on points alone,
+      // with zero coverage of either required key.
+      const normalDecoys = Array.from({ length: 8 }, () =>
+        makeMultiEffectRelic(RED_ITEM_ID, [meleeEffect])
+      );
+      // Noise: same real points as a decoy (one melee-effect occurrence),
+      // but also carries required key A - enough of them to fill an
+      // entire top-K pool by themselves under a coverage-first ranking.
+      const normalNoise = Array.from({ length: 300 }, () =>
+        makeMultiEffectRelic(RED_ITEM_ID, [meleeEffect, effectA])
+      );
+
+      const deepDecoys = Array.from({ length: 8 }, () =>
+        makeMultiEffectRelic(BLUE_ITEM_ID, [meleeEffect])
+      );
+      const cleanRelic = makeMultiEffectRelic(BLUE_ITEM_ID, [
+        meleeEffect,
+        effectA,
+        effectB,
+      ]);
+
+      const vessel: Vessel = {
+        name: "Test Vessel",
+        slots: [
+          RelicSlotColor.Red,
+          RelicSlotColor.Red,
+          RelicSlotColor.Red,
+          RelicSlotColor.Blue,
+          RelicSlotColor.Blue,
+          RelicSlotColor.Blue,
+        ],
+      };
+
+      const multiplierArray = new Float32Array(EFFECT_KEY_ARRAY_LENGTH).fill(1);
+      multiplierArray[EffectKey.improvedMeleeAttackPower] = 1.05;
+
+      const effectRanges = [
+        {
+          effectKey: EffectKey.strengthPlus1,
+          minStacks: 1,
+          maxStacks: 1,
+          matchMode: "exact" as const,
+        },
+        {
+          effectKey: EffectKey.dexterityPlus1,
+          minStacks: 1,
+          maxStacks: 1,
+          matchMode: "exact" as const,
+        },
+      ];
+
+      const workerInput = buildDamageWorkerInput(
+        Nightfarer.Wylder,
+        [...normalDecoys, ...normalNoise],
+        [...deepDecoys, cleanRelic],
+        [vessel],
+        multiplierArray,
+        [],
+        effectRanges
+      );
+      const wasmInput = buildWasmInput(workerInput);
+      const output = search_combinations(wasmInput) as {
+        combinations: Array<{ relic_indices: (number | null)[] }>;
+      };
+
+      expect(output.combinations.length).toBeGreaterThan(0);
+    }
+  );
 });
