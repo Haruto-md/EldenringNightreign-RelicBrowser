@@ -428,7 +428,8 @@ fn combination_satisfies_ranges(
                 for (i, (key, _min_s, _max_s)) in ranges.iter().enumerate() {
                     if effect_satisfies_key(effect, *key, selected_groups_by_key, selected_levels_by_key, selected_match_mode_by_key) {
                         let c = unsafe { counts.get_unchecked_mut(i) };
-                        if *c < u8::MAX { *c += 1; }
+                        // Increment count, capping at u8::MAX to prevent overflow
+                        *c = c.saturating_add(1);
                     }
                 }
             }
@@ -437,7 +438,8 @@ fn combination_satisfies_ranges(
     // Now validate counts fall within the ranges
     for (i, (_key, min_s, max_s)) in ranges.iter().enumerate() {
         let c = unsafe { *counts.get_unchecked(i) };
-        if c < *min_s || c > *max_s { return false; }
+        // Range validation: count must be >= min AND <= max
+        if !(c >= *min_s && c <= *max_s) { return false; }
     }
     true
 }
@@ -1318,5 +1320,42 @@ mod damage_tests {
 
         let higher_or_equal_mode = [MATCH_MODE_HIGHER_OR_EQUAL; EFFECT_KEY_SPACE];
         assert!(combination_satisfies_ranges(&idx, &normal, &deep, 0, &ranges, &selected_groups_by_key, &selected_levels_by_key, &higher_or_equal_mode));
+    }
+
+    #[test]
+    fn combination_satisfies_ranges_both_tiered_effects_exact_mode() {
+        // Regression test: when a relic has BOTH a base effect (tier 0) and a
+        // higher-tier effect (tier 1+) in the same group, and both are required
+        // with EXACT match mode and min=1 max=1, the combination should PASS
+        // if it has both effects, even though they're both in the same group.
+        const GROUP: u8 = 53;
+        const BASE_KEY: u32 = 145;
+        const BASE_LEVEL: u8 = 0;
+        const HIGHER_KEY: u32 = 647;
+        const HIGHER_LEVEL: u8 = 1;
+
+        let normal = vec![RelicSlot {
+            color: Some(1),
+            effects: vec![
+                Effect { key: 32, nightfarer: Some(6), stacks: Some(false), group: None, level: None, startingBonus: None, r#type: None },
+                Effect { key: BASE_KEY, nightfarer: None, stacks: Some(false), group: Some(GROUP), level: Some(BASE_LEVEL), startingBonus: None, r#type: None },
+                Effect { key: HIGHER_KEY, nightfarer: None, stacks: Some(false), group: Some(GROUP), level: Some(HIGHER_LEVEL), startingBonus: None, r#type: None },
+            ],
+        }];
+        let deep: Vec<RelicSlot> = vec![];
+        let idx: [Option<usize>; 6] = [Some(0), None, None, None, None, None];
+
+        let mut selected_groups_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        let mut selected_levels_by_key = [u8::MAX; EFFECT_KEY_SPACE];
+        selected_groups_by_key[BASE_KEY as usize] = GROUP;
+        selected_levels_by_key[BASE_KEY as usize] = BASE_LEVEL;
+        selected_groups_by_key[HIGHER_KEY as usize] = GROUP;
+        selected_levels_by_key[HIGHER_KEY as usize] = HIGHER_LEVEL;
+        let ranges: Vec<(u32, u8, u8)> = vec![(HIGHER_KEY, 1, 1), (BASE_KEY, 1, 1)];
+
+        let exact_mode = [MATCH_MODE_EXACT; EFFECT_KEY_SPACE];
+        // Should PASS: combination has exactly 1 of HIGHER_KEY and exactly 1 of BASE_KEY
+        assert!(combination_satisfies_ranges(&idx, &normal, &deep, 6, &ranges, &selected_groups_by_key, &selected_levels_by_key, &exact_mode),
+            "combination with both tiered effects should pass EXACT mode matching when both are required");
     }
 }
